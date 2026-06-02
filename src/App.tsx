@@ -48,8 +48,9 @@ const STORAGE_KEY = "medical-root-suffix-match-state";
 
 function getApiOrigin() {
   if (typeof window === "undefined") return "http://localhost:3001";
-  if (window.location.port && window.location.port !== "5173") return window.location.origin;
-  return `${window.location.protocol}//${window.location.hostname}:3001`;
+  const isLocalDev = ["localhost", "127.0.0.1"].includes(window.location.hostname) && window.location.port === "5173";
+  if (isLocalDev) return `${window.location.protocol}//${window.location.hostname}:3001`;
+  return window.location.origin;
 }
 const API_ORIGIN = getApiOrigin();
 const API_STATE_URL = `${API_ORIGIN}/api/state`;
