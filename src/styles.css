@@ -1,0 +1,380 @@
+:root {
+  color: #18212f;
+  background: #f5f7fb;
+  font-family: "Microsoft JhengHei", "Noto Sans TC", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button,
+.file-button {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #d6deea;
+  border-radius: 8px;
+  color: #273247;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 8px;
+  min-height: 40px;
+  padding: 9px 13px;
+}
+
+button:hover,
+.file-button:hover {
+  border-color: #8ca3c4;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.primary,
+button.primary {
+  background: #1967d2;
+  border-color: #1967d2;
+  color: #ffffff;
+}
+
+.app-shell {
+  min-height: 100vh;
+}
+
+.top-nav {
+  align-items: center;
+  background: #ffffff;
+  border-bottom: 1px solid #dce3ee;
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px clamp(18px, 4vw, 48px);
+}
+
+.top-nav h1 {
+  font-size: clamp(20px, 2.4vw, 30px);
+  margin: 4px 0 0;
+}
+
+.eyebrow {
+  color: #6b7586;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.nav-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.nav-actions .active {
+  background: #e8f0fe;
+  border-color: #1967d2;
+  color: #174ea6;
+}
+
+.login-page {
+  display: grid;
+  min-height: calc(100vh - 88px);
+  place-items: center;
+  padding: 24px;
+}
+
+.login-panel,
+.panel,
+.game-panel,
+.leaderboard {
+  background: #ffffff;
+  border: 1px solid #dce3ee;
+  border-radius: 8px;
+}
+
+.login-panel {
+  display: grid;
+  gap: 16px;
+  max-width: 420px;
+  padding: 28px;
+  width: 100%;
+}
+
+label {
+  color: #445064;
+  display: grid;
+  gap: 7px;
+  font-weight: 700;
+}
+
+input,
+select {
+  background: #ffffff;
+  border: 1px solid #cfd8e6;
+  border-radius: 8px;
+  min-height: 40px;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+.hint {
+  color: #687385;
+  margin: 0;
+}
+
+.error-text,
+.wrong {
+  color: #b3261e;
+}
+
+.student-layout {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  padding: 24px clamp(18px, 4vw, 48px);
+}
+
+.game-panel {
+  overflow: hidden;
+}
+
+.status-bar,
+.control-strip {
+  align-items: center;
+  background: #26354f;
+  color: #ffffff;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  justify-content: space-between;
+  padding: 14px 18px;
+}
+
+.icon-button {
+  min-height: 34px;
+  padding: 6px 9px;
+}
+
+.game-board {
+  display: grid;
+  gap: 22px;
+  padding: 24px;
+}
+
+.question-band {
+  align-items: center;
+  background: #eef4ff;
+  border-left: 5px solid #1967d2;
+  display: flex;
+  gap: 14px;
+  padding: 18px;
+}
+
+.question-band strong {
+  font-size: clamp(24px, 4vw, 42px);
+}
+
+.option-grid {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.option-grid h3 {
+  margin-top: 0;
+}
+
+.chips {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.chip {
+  font-size: 22px;
+  justify-content: center;
+  min-height: 64px;
+}
+
+.chip.root,
+.root-text {
+  color: #c5221f;
+  font-weight: 800;
+}
+
+.chip.suffix {
+  color: #111827;
+  font-weight: 800;
+}
+
+.chip.selected {
+  background: #fff0f0;
+  border-color: #c5221f;
+}
+
+.result-line {
+  border-radius: 8px;
+  font-size: 28px;
+  font-weight: 900;
+  padding: 16px;
+}
+
+.result-line.correct {
+  background: #e6f4ea;
+  color: #137333;
+}
+
+.result-line.wrong {
+  background: #fce8e6;
+}
+
+.empty-state {
+  display: grid;
+  min-height: 420px;
+  place-items: center;
+  text-align: center;
+}
+
+.leaderboard {
+  padding: 18px;
+}
+
+.leaderboard h2 {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  margin-top: 0;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th,
+td {
+  border-bottom: 1px solid #e1e7f0;
+  padding: 10px 8px;
+  text-align: left;
+}
+
+th {
+  color: #5d697b;
+  font-size: 13px;
+}
+
+.admin-layout {
+  padding: 24px clamp(18px, 4vw, 48px);
+}
+
+.admin-grid {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 18px;
+}
+
+.panel {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.panel h2 {
+  margin: 0;
+}
+
+.word-form,
+.teacher-form,
+.team-row {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.team-row {
+  align-items: center;
+  grid-template-columns: 1fr 1fr auto auto;
+}
+
+.inline-check {
+  align-items: center;
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+}
+
+.inline-check input {
+  width: auto;
+}
+
+.file-button {
+  justify-content: center;
+}
+
+.file-button input {
+  display: none;
+}
+
+.table-scroll {
+  max-height: 300px;
+  overflow: auto;
+}
+
+.export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.screen-view {
+  display: grid;
+  gap: 16px;
+  padding: 34px clamp(18px, 5vw, 64px);
+  text-align: center;
+}
+
+.screen-time {
+  color: #1967d2;
+  font-size: clamp(56px, 12vw, 150px);
+  font-weight: 900;
+  line-height: 1;
+}
+
+.screen-view .leaderboard {
+  margin: 0 auto;
+  max-width: 920px;
+  text-align: left;
+  width: 100%;
+}
+
+@media (max-width: 980px) {
+  .student-layout,
+  .admin-grid,
+  .option-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .top-nav {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .word-form,
+  .team-row {
+    grid-template-columns: 1fr;
+  }
+}
