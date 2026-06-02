@@ -2,7 +2,7 @@
 
 醫學英文單字字根（Root）與字尾（Suffix）配對競賽系統。此版本使用 Vite + React + TypeScript 前端，搭配 Node/Express/Socket.IO 本機後端。
 
-題庫、隊伍、教師帳號、比賽狀態、分數與作答紀錄會儲存在 `server/data/state.json`。多個瀏覽器或多台電腦連到同一台主機時，排行榜與作答資料會即時同步。
+題庫、隊伍、教師帳號、比賽狀態、分數與作答紀錄會儲存在 SQLite 資料庫。預設資料庫路徑是 `server/data/medical-match.sqlite`，也可用 `DB_PATH` 環境變數指定。多個瀏覽器或多台電腦連到同一台主機時，排行榜與作答資料會即時同步。
 
 ## 啟動方式
 
@@ -72,6 +72,7 @@ http://localhost:3001
 - 排名結果匯出 PDF。
 - 大螢幕模式顯示倒數時間與排行榜。
 - 後端 API 與 Socket.IO 即時同步狀態。
+- SQLite 資料庫儲存題庫、隊伍、教師、比賽設定與作答紀錄。
 
 ## Excel 匯入格式
 
@@ -114,3 +115,9 @@ start_command: npm start
 5. Zeabur 會執行 build 並用 `npm start` 啟動服務。
 
 正式部署後，前端、API 與 Socket.IO 都會由同一個 Zeabur 網址提供。
+
+如果要讓 SQLite 資料在 Zeabur 重新部署後保留，請在 Zeabur 加上持久化 Volume，並設定環境變數：
+
+```text
+DB_PATH=/data/medical-match.sqlite
+```

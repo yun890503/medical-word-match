@@ -4,4 +4,7 @@ dist/
 .env.local
 npm-debug.log*
 server/data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
 webServerApiSettings.json
