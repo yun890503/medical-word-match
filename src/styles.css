@@ -299,6 +299,7 @@ th {
 
 .word-form,
 .teacher-form,
+.team-form,
 .team-row {
   display: grid;
   gap: 10px;
@@ -307,7 +308,12 @@ th {
 
 .team-row {
   align-items: center;
-  grid-template-columns: 1fr 1fr auto auto;
+  grid-template-columns: 1fr 1fr auto auto auto auto;
+}
+
+.team-form {
+  align-items: center;
+  grid-template-columns: 1fr 1fr auto auto auto;
 }
 
 .inline-check {
@@ -374,6 +380,7 @@ th {
   }
 
   .word-form,
+  .team-form,
   .team-row {
     grid-template-columns: 1fr;
   }
