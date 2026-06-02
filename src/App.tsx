@@ -46,15 +46,10 @@ type AppState = {
 
 const STORAGE_KEY = "medical-root-suffix-match-state";
 
-// function getApiOrigin() {
-//   if (typeof window === "undefined") return "http://localhost:3001";
-//   if (window.location.port && window.location.port !== "5173") return window.location.origin;
-//   return `${window.location.protocol}//${window.location.hostname}:3001`;
-// }
 function getApiOrigin() {
-  if (typeof window === "undefined") return "";
-
-  return window.location.origin;
+  if (typeof window === "undefined") return "http://localhost:3001";
+  if (window.location.port && window.location.port !== "5173") return window.location.origin;
+  return `${window.location.protocol}//${window.location.hostname}:3001`;
 }
 const API_ORIGIN = getApiOrigin();
 const API_STATE_URL = `${API_ORIGIN}/api/state`;
@@ -129,6 +124,19 @@ function authHeaders(token?: string): Record<string, string> {
 
 function normalize(value: string) {
   return value.trim().toLowerCase();
+}
+
+function cleanCell(value: unknown) {
+  return String(value ?? "").trim();
+}
+
+function getImportedCell(row: Record<string, unknown>, names: string[]) {
+  const normalized = new Map(Object.entries(row).map(([key, value]) => [key.trim(), value]));
+  for (const name of names) {
+    const value = normalized.get(name);
+    if (value !== undefined) return cleanCell(value);
+  }
+  return "";
 }
 
 function shuffle<T>(items: T[]) {
@@ -464,6 +472,7 @@ function AdminView({ state, setState, remaining, scoreboard, currentTeacherId }:
   const [wordDraft, setWordDraft] = useState<WordItem>({ id: "", chinese: "", word: "", root: "", suffix: "" });
   const [teacherDraft, setTeacherDraft] = useState<Teacher>({ id: "", name: "", username: "", password: "", enabled: true });
   const [teacherError, setTeacherError] = useState("");
+  const [importMessage, setImportMessage] = useState("");
   const [customMinutes, setCustomMinutes] = useState(Math.round(state.settings.durationSeconds / 60).toString());
 
   function startMatch() {
@@ -516,10 +525,32 @@ function AdminView({ state, setState, remaining, scoreboard, currentTeacherId }:
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      const workbook = XLSX.read(reader.result, { type: "array" });
-      const rows = XLSX.utils.sheet_to_json<Record<string, string>>(workbook.Sheets[workbook.SheetNames[0]]);
-      const imported = rows.map((row) => ({ id: crypto.randomUUID(), chinese: row["中文"] || row["中文名稱"] || "", word: row["完整單字"] || "", root: row["字根"] || "", suffix: row["字尾"] || "" })).filter((row) => row.chinese && row.word && row.root && row.suffix);
-      setState((current) => ({ ...current, words: [...current.words, ...imported] }));
+      try {
+        const workbook = XLSX.read(reader.result, { type: "array" });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
+        const imported = rows.map((row) => ({
+          id: crypto.randomUUID(),
+          chinese: getImportedCell(row, ["中文", "中文名稱", "Chinese"]),
+          word: getImportedCell(row, ["完整單字", "單字", "Example of Usage", "Example", "Word"]),
+          root: getImportedCell(row, ["字根", "Root", "Stem", "Prefix"]),
+          suffix: getImportedCell(row, ["字尾", "Suffix"]),
+        })).filter((row) => row.chinese && row.word && row.root && row.suffix);
+        if (imported.length === 0) {
+          setImportMessage("匯入失敗：Excel 需要包含「中文名稱、完整單字、字根、字尾」欄位。");
+          return;
+        }
+        setState((current) => ({ ...current, words: [...current.words, ...imported] }));
+        setImportMessage(`已匯入 ${imported.length} 筆詞彙。`);
+      } catch {
+        setImportMessage("匯入失敗：請確認檔案是 .xlsx 或 .xls，且第一列是欄位名稱。");
+      } finally {
+        event.target.value = "";
+      }
+    };
+    reader.onerror = () => {
+      setImportMessage("匯入失敗：讀取檔案時發生錯誤。");
+      event.target.value = "";
     };
     reader.readAsArrayBuffer(file);
   }
@@ -569,6 +600,7 @@ function AdminView({ state, setState, remaining, scoreboard, currentTeacherId }:
             <button className="primary" type="submit">儲存</button>
           </form>
           <label className="file-button"><FileSpreadsheet size={18} /> 匯入 Excel<input type="file" accept=".xlsx,.xls" onChange={importExcel} /></label>
+          {importMessage && <p className="hint">{importMessage}</p>}
           <div className="table-scroll">
             <table>
               <thead>
