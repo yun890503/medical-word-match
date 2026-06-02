@@ -5,15 +5,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import { Server } from "socket.io";
-import { createDatabase, defaultState, mergeTeamRecords, readState, replaceState, resetDatabase } from "./database.js";
+import { createDatabase, mergeTeamRecords, readState, replaceState, resetDatabase } from "./database.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
 const distDir = path.join(rootDir, "dist");
-const dataDir = path.join(__dirname, "data");
-const dbPath = process.env.DB_PATH || path.join(dataDir, "medical-match.sqlite");
 const port = Number(process.env.PORT || process.env.API_PORT || 3001);
-const db = createDatabase(dbPath);
+const db = await createDatabase();
 
 function mergeRecords(currentRecords = [], incomingRecords = []) {
   const merged = new Map();
@@ -61,23 +59,23 @@ function createSession(role, id) {
   return session;
 }
 
-function getEffectiveState() {
-  let current = readState(db);
+async function getEffectiveState() {
+  let current = await readState(db);
   if (current.status !== "running" || !current.startedAt) return current;
   const elapsed = Math.floor((Date.now() - current.startedAt) / 1000) + (current.elapsedBeforePause || 0);
   if (elapsed < current.settings.durationSeconds) return current;
-  current = replaceState(db, { ...current, status: "ended" });
+  current = await replaceState(db, { ...current, status: "ended" });
   return current;
 }
 
-function mergeTeamSubmission(currentState, incomingState, teamId) {
+async function mergeTeamSubmission(currentState, incomingState, teamId) {
   if (currentState.status !== "running") return currentState;
   return mergeTeamRecords(db, teamId, incomingState.records || []);
 }
 
-function broadcastState() {
+async function broadcastState() {
   for (const socket of io.sockets.sockets.values()) {
-    socket.emit("state", sanitizeStateForRole(getEffectiveState(), socket.data.session?.role));
+    socket.emit("state", sanitizeStateForRole(await getEffectiveState(), socket.data.session?.role));
   }
 }
 
@@ -102,52 +100,58 @@ app.use((request, response, next) => {
   next();
 });
 
-app.post("/api/login", (request, response) => {
-  const state = readState(db);
+function asyncRoute(handler) {
+  return (request, response, next) => {
+    Promise.resolve(handler(request, response, next)).catch(next);
+  };
+}
+
+app.post("/api/login", asyncRoute(async (request, response) => {
+  const state = await readState(db);
   const account = String(request.body.account || "").trim().toLowerCase();
   const password = String(request.body.password || "");
   const teacher = state.teachers.find((item) => item.enabled && item.username.toLowerCase() === account && item.password === password);
   if (teacher) {
     const session = createSession("teacher", teacher.id);
-    response.json({ session, state: sanitizeStateForRole(getEffectiveState(), "teacher") });
+    response.json({ session, state: sanitizeStateForRole(await getEffectiveState(), "teacher") });
     return;
   }
 
   const team = state.teams.find((item) => item.enabled && item.name.toLowerCase() === account && item.password === password);
   if (team) {
     const session = createSession("team", team.id);
-    response.json({ session, state: sanitizeStateForRole(getEffectiveState(), "team") });
+    response.json({ session, state: sanitizeStateForRole(await getEffectiveState(), "team") });
     return;
   }
 
   response.status(401).json({ message: "Invalid account or password." });
-});
+}));
 
-app.get("/api/state", (request, response) => {
+app.get("/api/state", asyncRoute(async (request, response) => {
   const session = getSession(request);
-  response.json(sanitizeStateForRole(getEffectiveState(), session?.role));
-});
+  response.json(sanitizeStateForRole(await getEffectiveState(), session?.role));
+}));
 
-app.post("/api/state", (request, response) => {
+app.post("/api/state", asyncRoute(async (request, response) => {
   const session = getSession(request);
   if (!session) {
     response.status(401).json({ message: "Login required." });
     return;
   }
 
-  const current = getEffectiveState();
+  const current = await getEffectiveState();
   const state = session.role === "teacher"
-    ? replaceState(db, mergeIncomingState(current, request.body))
-    : mergeTeamSubmission(current, request.body, session.id);
-  broadcastState();
+    ? await replaceState(db, mergeIncomingState(current, request.body))
+    : await mergeTeamSubmission(current, request.body, session.id);
+  await broadcastState();
   response.json(sanitizeStateForRole(state, session.role));
-});
+}));
 
-app.post("/api/reset", (_request, response) => {
-  const state = resetDatabase(db);
-  broadcastState();
+app.post("/api/reset", asyncRoute(async (_request, response) => {
+  const state = await resetDatabase(db);
+  await broadcastState();
   response.json(state);
-});
+}));
 
 if (existsSync(distDir)) {
   app.use(express.static(distDir));
@@ -159,7 +163,14 @@ if (existsSync(distDir)) {
 io.on("connection", (socket) => {
   const token = socket.handshake.auth?.token || socket.handshake.query?.token;
   socket.data.session = token ? sessions.get(token) : null;
-  socket.emit("state", sanitizeStateForRole(getEffectiveState(), socket.data.session?.role));
+  getEffectiveState()
+    .then((state) => socket.emit("state", sanitizeStateForRole(state, socket.data.session?.role)))
+    .catch((error) => socket.emit("state-error", { message: error.message }));
+});
+
+app.use((error, _request, response, _next) => {
+  console.error(error);
+  response.status(500).json({ message: "Server error." });
 });
 
 httpServer.listen(port, "0.0.0.0", () => {

@@ -1,6 +1,4 @@
-import Database from "better-sqlite3";
-import { mkdirSync } from "node:fs";
-import path from "node:path";
+import mysql from "mysql2/promise";
 import { randomUUID } from "node:crypto";
 
 export const defaultState = {
@@ -31,6 +29,8 @@ export const defaultState = {
   records: [],
 };
 
+let questionBank = defaultState.words;
+
 function boolToInt(value) {
   return value ? 1 : 0;
 }
@@ -39,11 +39,12 @@ function intToBool(value) {
   return Boolean(value);
 }
 
-function normalizeState(nextState) {
+function normalizeState(nextState = {}) {
+  const words = nextState.words?.length ? nextState.words : questionBank;
   return {
     ...defaultState,
     ...nextState,
-    words: nextState.words?.length ? nextState.words : defaultState.words,
+    words,
     teams: nextState.teams?.length ? nextState.teams : defaultState.teams,
     teachers: nextState.teachers?.length ? nextState.teachers : defaultState.teachers,
     settings: { ...defaultState.settings, ...nextState.settings },
@@ -51,140 +52,253 @@ function normalizeState(nextState) {
   };
 }
 
-export function createDatabase(dbPath) {
-  mkdirSync(path.dirname(dbPath), { recursive: true });
-  const db = new Database(dbPath);
-  db.pragma("journal_mode = WAL");
-  db.pragma("foreign_keys = ON");
+function getMysqlConfig() {
+  const databaseUrl = process.env.DATABASE_URL || process.env.MYSQL_URL;
+  if (databaseUrl) {
+    const url = new URL(databaseUrl);
+    return {
+      host: url.hostname,
+      port: Number(url.port || 3306),
+      user: decodeURIComponent(url.username),
+      password: decodeURIComponent(url.password),
+      database: decodeURIComponent(url.pathname.replace(/^\//, "")),
+      waitForConnections: true,
+      connectionLimit: 10,
+      charset: "utf8mb4",
+    };
+  }
 
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS words (
-      id TEXT PRIMARY KEY,
-      word TEXT NOT NULL,
-      chinese TEXT NOT NULL,
-      root TEXT NOT NULL,
-      suffix TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS teams (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL UNIQUE,
-      password TEXT NOT NULL,
-      enabled INTEGER NOT NULL DEFAULT 1
-    );
-
-    CREATE TABLE IF NOT EXISTS teachers (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      username TEXT NOT NULL UNIQUE,
-      password TEXT NOT NULL,
-      enabled INTEGER NOT NULL DEFAULT 1
-    );
-
-    CREATE TABLE IF NOT EXISTS settings (
-      id INTEGER PRIMARY KEY CHECK (id = 1),
-      question_count INTEGER NOT NULL,
-      duration_seconds INTEGER NOT NULL,
-      show_chinese INTEGER NOT NULL,
-      leaderboard_mode TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS match_state (
-      id INTEGER PRIMARY KEY CHECK (id = 1),
-      status TEXT NOT NULL,
-      started_at INTEGER,
-      paused_at INTEGER,
-      elapsed_before_pause INTEGER NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS answer_records (
-      id TEXT PRIMARY KEY,
-      team_id TEXT NOT NULL,
-      team_name TEXT NOT NULL,
-      question_id TEXT NOT NULL,
-      chinese TEXT NOT NULL,
-      selected_root TEXT NOT NULL,
-      selected_suffix TEXT NOT NULL,
-      combined TEXT NOT NULL,
-      correct INTEGER NOT NULL,
-      answered_at TEXT NOT NULL,
-      seconds_from_start INTEGER NOT NULL,
-      UNIQUE(team_id, question_id)
-    );
-  `);
-
-  const wordCount = db.prepare("SELECT COUNT(*) AS count FROM words").get().count;
-  if (wordCount === 0) replaceState(db, defaultState);
-  return db;
+  return {
+    host: process.env.MYSQL_HOST || process.env.DB_HOST || "127.0.0.1",
+    port: Number(process.env.MYSQL_PORT || process.env.DB_PORT || 3306),
+    user: process.env.MYSQL_USER || process.env.DB_USER || "root",
+    password: process.env.MYSQL_PASSWORD || process.env.DB_PASSWORD || "",
+    database: process.env.MYSQL_DATABASE || process.env.DB_NAME || "zeabur",
+    waitForConnections: true,
+    connectionLimit: 10,
+    charset: "utf8mb4",
+  };
 }
 
-export function readState(db) {
-  const settings = db.prepare("SELECT * FROM settings WHERE id = 1").get();
-  const match = db.prepare("SELECT * FROM match_state WHERE id = 1").get();
-  return normalizeState({
-    words: db.prepare("SELECT id, word, chinese, root, suffix FROM words ORDER BY rowid").all(),
-    teams: db.prepare("SELECT id, name, password, enabled FROM teams ORDER BY rowid").all().map((team) => ({ ...team, enabled: intToBool(team.enabled) })),
-    teachers: db.prepare("SELECT id, name, username, password, enabled FROM teachers ORDER BY rowid").all().map((teacher) => ({ ...teacher, enabled: intToBool(teacher.enabled) })),
-    settings: settings ? {
-      questionCount: settings.question_count,
-      durationSeconds: settings.duration_seconds,
-      showChinese: intToBool(settings.show_chinese),
-      leaderboardMode: settings.leaderboard_mode,
-    } : defaultState.settings,
-    status: match?.status ?? defaultState.status,
-    startedAt: match?.started_at ?? null,
-    pausedAt: match?.paused_at ?? null,
-    elapsedBeforePause: match?.elapsed_before_pause ?? 0,
-    records: db.prepare(`
+async function initializeSchema(pool) {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS teams (
+      id VARCHAR(80) PRIMARY KEY,
+      name VARCHAR(120) NOT NULL UNIQUE,
+      password VARCHAR(255) NOT NULL,
+      enabled TINYINT(1) NOT NULL DEFAULT 1,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS teachers (
+      id VARCHAR(80) PRIMARY KEY,
+      name VARCHAR(120) NOT NULL,
+      username VARCHAR(120) NOT NULL UNIQUE,
+      password VARCHAR(255) NOT NULL,
+      enabled TINYINT(1) NOT NULL DEFAULT 1,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS settings (
+      id TINYINT PRIMARY KEY,
+      question_count INT NOT NULL,
+      duration_seconds INT NOT NULL,
+      show_chinese TINYINT(1) NOT NULL,
+      leaderboard_mode VARCHAR(20) NOT NULL,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS match_state (
+      id TINYINT PRIMARY KEY,
+      status VARCHAR(20) NOT NULL,
+      started_at BIGINT NULL,
+      paused_at BIGINT NULL,
+      elapsed_before_pause INT NOT NULL,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS answer_records (
+      id VARCHAR(80) PRIMARY KEY,
+      team_id VARCHAR(80) NOT NULL,
+      team_name VARCHAR(120) NOT NULL,
+      question_id VARCHAR(80) NOT NULL,
+      chinese VARCHAR(255) NOT NULL,
+      selected_root VARCHAR(120) NOT NULL,
+      selected_suffix VARCHAR(120) NOT NULL,
+      combined VARCHAR(255) NOT NULL,
+      correct TINYINT(1) NOT NULL,
+      answered_at VARCHAR(80) NOT NULL,
+      seconds_from_start INT NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY unique_team_question (team_id, question_id),
+      INDEX idx_records_team (team_id),
+      INDEX idx_records_score_order (seconds_from_start)
+    ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+  `);
+}
+
+async function seedDefaultsIfNeeded(pool) {
+  const [rows] = await pool.query("SELECT COUNT(*) AS count FROM teams");
+  if (Number(rows[0]?.count || 0) === 0) {
+    await replaceState(pool, defaultState);
+  }
+}
+
+export async function createDatabase() {
+  const pool = mysql.createPool(getMysqlConfig());
+  await initializeSchema(pool);
+  await seedDefaultsIfNeeded(pool);
+  return pool;
+}
+
+export async function readState(pool) {
+  const [[settings], [match], [teams], [teachers], [records]] = await Promise.all([
+    pool.query("SELECT * FROM settings WHERE id = 1"),
+    pool.query("SELECT * FROM match_state WHERE id = 1"),
+    pool.query("SELECT id, name, password, enabled FROM teams ORDER BY created_at, id"),
+    pool.query("SELECT id, name, username, password, enabled FROM teachers ORDER BY created_at, id"),
+    pool.query(`
       SELECT id, team_id AS teamId, team_name AS teamName, question_id AS questionId,
         chinese, selected_root AS selectedRoot, selected_suffix AS selectedSuffix,
         combined, correct, answered_at AS answeredAt, seconds_from_start AS secondsFromStart
       FROM answer_records
-      ORDER BY seconds_from_start, rowid
-    `).all().map((record) => ({ ...record, correct: intToBool(record.correct) })),
+      ORDER BY seconds_from_start, created_at, id
+    `),
+  ]);
+
+  return normalizeState({
+    words: questionBank,
+    teams: teams.map((team) => ({ ...team, enabled: intToBool(team.enabled) })),
+    teachers: teachers.map((teacher) => ({ ...teacher, enabled: intToBool(teacher.enabled) })),
+    settings: settings[0] ? {
+      questionCount: settings[0].question_count,
+      durationSeconds: settings[0].duration_seconds,
+      showChinese: intToBool(settings[0].show_chinese),
+      leaderboardMode: settings[0].leaderboard_mode,
+    } : defaultState.settings,
+    status: match[0]?.status ?? defaultState.status,
+    startedAt: match[0]?.started_at === null || match[0]?.started_at === undefined ? null : Number(match[0].started_at),
+    pausedAt: match[0]?.paused_at === null || match[0]?.paused_at === undefined ? null : Number(match[0].paused_at),
+    elapsedBeforePause: match[0]?.elapsed_before_pause ?? 0,
+    records: records.map((record) => ({ ...record, correct: intToBool(record.correct) })),
   });
 }
 
-export const replaceState = (db, incomingState) => {
+export async function replaceState(pool, incomingState) {
   const state = normalizeState(incomingState);
-  const transaction = db.transaction(() => {
-    db.exec("DELETE FROM answer_records; DELETE FROM words; DELETE FROM teams; DELETE FROM teachers; DELETE FROM settings; DELETE FROM match_state;");
-    const insertWord = db.prepare("INSERT INTO words (id, word, chinese, root, suffix) VALUES (?, ?, ?, ?, ?)");
-    const insertTeam = db.prepare("INSERT INTO teams (id, name, password, enabled) VALUES (?, ?, ?, ?)");
-    const insertTeacher = db.prepare("INSERT INTO teachers (id, name, username, password, enabled) VALUES (?, ?, ?, ?, ?)");
-    const insertRecord = db.prepare(`
-      INSERT INTO answer_records (id, team_id, team_name, question_id, chinese, selected_root, selected_suffix, combined, correct, answered_at, seconds_from_start)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    for (const word of state.words) insertWord.run(word.id || randomUUID(), word.word, word.chinese, word.root, word.suffix);
-    for (const team of state.teams) insertTeam.run(team.id || randomUUID(), team.name, team.password || "", boolToInt(team.enabled));
-    for (const teacher of state.teachers) insertTeacher.run(teacher.id || randomUUID(), teacher.name, teacher.username, teacher.password || "", boolToInt(teacher.enabled));
-    db.prepare("INSERT INTO settings (id, question_count, duration_seconds, show_chinese, leaderboard_mode) VALUES (1, ?, ?, ?, ?)")
-      .run(state.settings.questionCount, state.settings.durationSeconds, boolToInt(state.settings.showChinese), state.settings.leaderboardMode);
-    db.prepare("INSERT INTO match_state (id, status, started_at, paused_at, elapsed_before_pause) VALUES (1, ?, ?, ?, ?)")
-      .run(state.status, state.startedAt, state.pausedAt, state.elapsedBeforePause);
-    for (const record of state.records) {
-      insertRecord.run(record.id || randomUUID(), record.teamId, record.teamName, record.questionId, record.chinese, record.selectedRoot, record.selectedSuffix, record.combined, boolToInt(record.correct), record.answeredAt, record.secondsFromStart);
-    }
-  });
-  transaction();
-  return readState(db);
-};
+  questionBank = state.words;
+  const connection = await pool.getConnection();
 
-export function mergeTeamRecords(db, teamId, records) {
-  const insert = db.prepare(`
-    INSERT OR IGNORE INTO answer_records (id, team_id, team_name, question_id, chinese, selected_root, selected_suffix, combined, correct, answered_at, seconds_from_start)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  const transaction = db.transaction(() => {
-    for (const record of records.filter((item) => item.teamId === teamId)) {
-      insert.run(record.id || randomUUID(), record.teamId, record.teamName, record.questionId, record.chinese, record.selectedRoot, record.selectedSuffix, record.combined, boolToInt(record.correct), record.answeredAt, record.secondsFromStart);
+  try {
+    await connection.beginTransaction();
+    await connection.query("DELETE FROM answer_records");
+    await connection.query("DELETE FROM teams");
+    await connection.query("DELETE FROM teachers");
+    await connection.query("DELETE FROM settings");
+    await connection.query("DELETE FROM match_state");
+
+    for (const team of state.teams) {
+      await connection.query(
+        "INSERT INTO teams (id, name, password, enabled) VALUES (?, ?, ?, ?)",
+        [team.id || randomUUID(), team.name, team.password || "", boolToInt(team.enabled)],
+      );
     }
-  });
-  transaction();
-  return readState(db);
+
+    for (const teacher of state.teachers) {
+      await connection.query(
+        "INSERT INTO teachers (id, name, username, password, enabled) VALUES (?, ?, ?, ?, ?)",
+        [teacher.id || randomUUID(), teacher.name, teacher.username, teacher.password || "", boolToInt(teacher.enabled)],
+      );
+    }
+
+    await connection.query(
+      "INSERT INTO settings (id, question_count, duration_seconds, show_chinese, leaderboard_mode) VALUES (1, ?, ?, ?, ?)",
+      [state.settings.questionCount, state.settings.durationSeconds, boolToInt(state.settings.showChinese), state.settings.leaderboardMode],
+    );
+
+    await connection.query(
+      "INSERT INTO match_state (id, status, started_at, paused_at, elapsed_before_pause) VALUES (1, ?, ?, ?, ?)",
+      [state.status, state.startedAt, state.pausedAt, state.elapsedBeforePause],
+    );
+
+    for (const record of state.records) {
+      await connection.query(
+        `INSERT INTO answer_records
+          (id, team_id, team_name, question_id, chinese, selected_root, selected_suffix, combined, correct, answered_at, seconds_from_start)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          record.id || randomUUID(),
+          record.teamId,
+          record.teamName,
+          record.questionId,
+          record.chinese,
+          record.selectedRoot,
+          record.selectedSuffix,
+          record.combined,
+          boolToInt(record.correct),
+          record.answeredAt,
+          record.secondsFromStart,
+        ],
+      );
+    }
+
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+
+  return readState(pool);
 }
 
-export function resetDatabase(db) {
-  return replaceState(db, defaultState);
+export async function mergeTeamRecords(pool, teamId, records) {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    for (const record of records.filter((item) => item.teamId === teamId)) {
+      await connection.query(
+        `INSERT IGNORE INTO answer_records
+          (id, team_id, team_name, question_id, chinese, selected_root, selected_suffix, combined, correct, answered_at, seconds_from_start)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          record.id || randomUUID(),
+          record.teamId,
+          record.teamName,
+          record.questionId,
+          record.chinese,
+          record.selectedRoot,
+          record.selectedSuffix,
+          record.combined,
+          boolToInt(record.correct),
+          record.answeredAt,
+          record.secondsFromStart,
+        ],
+      );
+    }
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+
+  return readState(pool);
+}
+
+export function resetDatabase(pool) {
+  questionBank = defaultState.words;
+  return replaceState(pool, defaultState);
 }

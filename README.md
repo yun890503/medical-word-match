@@ -1,17 +1,29 @@
 # 醫學英文字根字尾配對競賽系統
 
-醫學英文單字字根（Root）與字尾（Suffix）配對競賽系統。此版本使用 Vite + React + TypeScript 前端，搭配 Node/Express/Socket.IO 本機後端。
+醫學英文單字字根（Root）與字尾（Suffix）配對競賽系統，使用 Vite + React + TypeScript 製作前台，Node.js + Express + Socket.IO 提供 API 與即時同步。
 
-題庫、隊伍、教師帳號、比賽狀態、分數與作答紀錄會儲存在 SQLite 資料庫。預設資料庫路徑是 `server/data/medical-match.sqlite`，也可用 `DB_PATH` 環境變數指定。多個瀏覽器或多台電腦連到同一台主機時，排行榜與作答資料會即時同步。
+## 資料儲存
 
-## 啟動方式
+系統使用 MySQL 儲存可變更資料：
+
+- 隊伍帳號
+- 教師帳號
+- 比賽設定
+- 比賽狀態
+- 分數與作答紀錄
+
+題目資料目前不寫入 MySQL，而是由伺服器啟動時載入記憶體題庫，前台作答時直接使用快取資料，避免每題都查詢資料庫。教師在後台匯入或修改題目後，題目會在目前伺服器執行期間生效；若服務重新啟動，題目會回到程式內建預設題庫。
+
+如果之後想讓題目也能永久保存，同時維持速度，可以改成「題目存 MySQL，但伺服器啟動時一次載入記憶體快取」。
+
+## 本機開發
 
 ```bash
 npm install
 npm run dev
 ```
 
-前端網址：
+前台網址：
 
 ```text
 http://localhost:5173
@@ -23,9 +35,21 @@ http://localhost:5173
 http://localhost:3001
 ```
 
-## 預設帳號
+本機啟動後端前，需要設定 MySQL 環境變數：
 
-教師後台：
+```text
+MYSQL_HOST=你的 MySQL 主機
+MYSQL_PORT=你的 MySQL 連接埠
+MYSQL_USER=你的 MySQL 帳號
+MYSQL_PASSWORD=你的 MySQL 密碼
+MYSQL_DATABASE=你的 MySQL 資料庫
+```
+
+也可以使用 `DATABASE_URL` 或 `MYSQL_URL`。
+
+## 預設登入帳號
+
+教師帳號：
 
 | 帳號 | 密碼 |
 | --- | --- |
@@ -46,78 +70,62 @@ http://localhost:3001
 ## 權限規則
 
 - 未登入只能看到登入頁。
-- 教師登入後可使用教師後台與大螢幕模式。
-- 隊伍登入後只能使用競賽頁與大螢幕模式，不能看到或進入教師後台。
+- 教師登入後可進入教師後台與大螢幕。
+- 隊伍登入後只能進入競賽頁與大螢幕。
+- 隊伍帳號不會看到教師後台入口，也無法透過狀態切換進入教師後台。
 - 教師後台可新增、修改、停用與刪除教師帳號。
-- 系統會阻止刪除或停用最後一個啟用中的教師帳號，避免後台無法登入。
+- 系統會避免刪除或停用最後一個啟用中的教師帳號，避免後台被鎖死。
 
-## 已包含功能
+## 主要功能
 
-- 同一登入頁支援教師與隊伍登入。
-- 字根紅色、字尾黑色、答對組合結果綠色。
-- 點選配對與拖曳配對。
-- 自動組合完整單字並比對題庫答案。
-- 答對 1 分，答錯 0 分。
-- 7 隊隊伍管理、密碼修改、重設密碼、啟用/停用。
-- 教師帳號新增、修改、停用、刪除。
-- 後台題庫新增、修改、刪除。
-- Excel 匯入題庫。
-- 題數設定：10、20、30、50 題。
-- 計時設定：3、5、10、15、20 分鐘與自訂分鐘。
-- 開始、暫停、結束比賽控制。
-- 排行榜依分數與完成時間排序。
-- 即時公布或賽後公布排行榜。
-- 後台查看各隊分數、排名與作答紀錄。
-- 成績與作答紀錄匯出 Excel。
-- 排名結果匯出 PDF。
-- 大螢幕模式顯示倒數時間與排行榜。
-- 後端 API 與 Socket.IO 即時同步狀態。
-- SQLite 資料庫儲存題庫、隊伍、教師、比賽設定與作答紀錄。
+- 字根與字尾拖曳配對
+- 字根與字尾點選配對
+- 答對 1 分，答錯 0 分
+- 7 組隊伍競賽
+- 倒數計時
+- 即時排行榜
+- 大螢幕投影模式
+- 題庫 Excel 匯入
+- 教師、隊伍、比賽設定管理
+- 作答紀錄匯出 Excel
+- 成績報表匯出 PDF
 
 ## Excel 匯入格式
 
-第一列請使用以下欄位名稱：
+支援下列欄位名稱：
 
 | 中文 | 完整單字 | 字根 | 字尾 |
 | --- | --- | --- | --- |
 | 神經學 | Neurology | neur | ology |
 | 心臟學 | Cardiology | cardi | ology |
 
-也支援把 `中文` 欄位寫成 `中文名稱`。
-
-## 多台電腦使用方式
-
-1. 在教師電腦執行 `npm run dev`。
-2. 確認教師電腦與學生電腦在同一個網路。
-3. 學生電腦用瀏覽器開啟教師電腦的區網 IP，例如：
-
-```text
-http://教師電腦IP:5173
-```
-
-正式長期部署時，建議改用正式資料庫、密碼雜湊與伺服器端登入權限驗證。
+也可使用 `中文名稱` 取代 `中文`。
 
 ## Zeabur 部署
 
-本專案已包含 `zbpack.json`，Zeabur 會使用：
+專案已提供 `zbpack.json`，Zeabur 會使用：
 
 ```text
 build_command: npm install && npm run build
 start_command: npm start
 ```
 
-部署流程：
+部署步驟：
 
-1. 先將此專案推送到 GitHub。
-2. 到 Zeabur 新增 Project。
-3. 選擇 Deploy from GitHub Repository。
-4. 選擇這個 repository。
-5. Zeabur 會執行 build 並用 `npm start` 啟動服務。
+1. 將專案 push 到 GitHub。
+2. 在 Zeabur 建立 Project。
+3. 新增 GitHub Repository 服務並選擇此專案。
+4. 在 Zeabur 的 Web 服務加入 MySQL 環境變數。
+5. 重新部署 Web 服務。
 
-正式部署後，前端、API 與 Socket.IO 都會由同一個 Zeabur 網址提供。
-
-如果要讓 SQLite 資料在 Zeabur 重新部署後保留，請在 Zeabur 加上持久化 Volume，並設定環境變數：
+Zeabur Web 服務需要設定：
 
 ```text
-DB_PATH=/data/medical-match.sqlite
+MYSQL_HOST=你的 MySQL host
+MYSQL_PORT=你的 MySQL port
+MYSQL_USER=你的 MySQL username
+MYSQL_PASSWORD=你的 MySQL password
+MYSQL_DATABASE=你的 MySQL database
 ```
+
+請不要把 MySQL 密碼寫進 GitHub 程式碼或 README，密碼只放在 Zeabur 的 Environment Variables。
