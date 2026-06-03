@@ -379,6 +379,12 @@ function StudentView({ state, setState, team, remaining, elapsed, scoreboard }: 
   const rankIndex = scoreboard.findIndex((item) => item.id === team.id);
   const rank = rankIndex >= 0 ? rankIndex + 1 : null;
   const result = rankIndex >= 0 ? scoreboard[rankIndex] : null;
+  const [resultDismissed, setResultDismissed] = useState(false);
+
+  useEffect(() => {
+    if (state.status !== "ended") setResultDismissed(false);
+  }, [state.status]);
+
   return (
     <main className="student-layout">
       <section className="game-panel">
@@ -390,24 +396,26 @@ function StudentView({ state, setState, team, remaining, elapsed, scoreboard }: 
         <GameBoard state={state} setState={setState} team={team} elapsed={elapsed} disabled={state.status !== "running" || remaining <= 0} />
       </section>
       <LeaderboardPanel state={state} scoreboard={scoreboard} compact={false} />
-      {state.status === "ended" && rank && result && <TeamResultOverlay rank={rank} result={result} />}
+      {state.status === "ended" && !resultDismissed && rank && result && <TeamResultOverlay rank={rank} result={result} onClose={() => setResultDismissed(true)} />}
     </main>
   );
 }
 
-function TeamResultOverlay({ rank, result }: {
+function TeamResultOverlay({ rank, result, onClose }: {
   rank: number;
   result: ReturnType<typeof buildScoreboard>[number];
+  onClose: () => void;
 }) {
   const medal = rank === 1 ? { label: "金牌", className: "gold" } : rank === 2 ? { label: "銀牌", className: "silver" } : rank === 3 ? { label: "銅牌", className: "bronze" } : null;
   return (
-    <div className="result-overlay" role="status" aria-live="polite">
-      <div className="result-card">
+    <div className="result-overlay" role="status" aria-live="polite" onClick={onClose}>
+      <div className="result-card" onClick={(event) => event.stopPropagation()}>
         {medal ? <div className={`medal ${medal.className}`}>{medal.label}</div> : <div className="medal standard">完成</div>}
         <p className="eyebrow">比賽結果</p>
         <h2>{result.name} 第 {rank} 名</h2>
         <p className="result-score">得分 {result.score} 分</p>
         <p className="hint">完成時間：{result.finishTime === Number.MAX_SAFE_INTEGER ? "-" : formatTime(result.finishTime)}</p>
+        <button type="button" onClick={onClose}>關閉</button>
       </div>
     </div>
   );
