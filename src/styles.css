@@ -1,6 +1,6 @@
 :root {
   color: #18212f;
-  background: #f5f7fb;
+  background: #f7fbff;
   font-family: "Microsoft JhengHei", "Noto Sans TC", system-ui, sans-serif;
 }
 
@@ -10,6 +10,7 @@
 
 body {
   margin: 0;
+  min-width: 320px;
 }
 
 button,
@@ -28,13 +29,16 @@ button,
   cursor: pointer;
   display: inline-flex;
   gap: 8px;
+  justify-content: center;
   min-height: 40px;
   padding: 9px 13px;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
 }
 
 button:hover,
 .file-button:hover {
   border-color: #8ca3c4;
+  transform: translateY(-1px);
 }
 
 button:disabled {
@@ -44,9 +48,11 @@ button:disabled {
 
 .primary,
 button.primary {
-  background: #1967d2;
-  border-color: #1967d2;
+  background: linear-gradient(135deg, #1f76ff, #15b8a6);
+  border-color: #1f76ff;
   color: #ffffff;
+  font-weight: 800;
+  box-shadow: 0 10px 22px rgba(31, 118, 255, 0.2);
 }
 
 .app-shell {
@@ -90,10 +96,14 @@ button.primary {
 }
 
 .login-page {
+  background:
+    radial-gradient(circle at 18% 16%, rgba(255, 213, 79, 0.42), transparent 28%),
+    radial-gradient(circle at 84% 24%, rgba(74, 222, 128, 0.28), transparent 26%),
+    linear-gradient(160deg, #eaf5ff 0%, #fff7fb 52%, #f4fff8 100%);
   display: grid;
   min-height: calc(100vh - 88px);
   place-items: center;
-  padding: 24px;
+  padding: clamp(18px, 5vw, 42px);
 }
 
 .login-panel,
@@ -106,11 +116,49 @@ button.primary {
 }
 
 .login-panel {
+  border: 2px solid rgba(31, 118, 255, 0.14);
+  box-shadow: 0 24px 70px rgba(42, 72, 112, 0.16);
   display: grid;
   gap: 16px;
-  max-width: 420px;
-  padding: 28px;
+  max-width: 440px;
+  padding: clamp(22px, 5vw, 34px);
+  position: relative;
   width: 100%;
+}
+
+.login-panel::before {
+  background: linear-gradient(90deg, #ffbf3f, #35d0ba, #5c8dff);
+  border-radius: 8px 8px 0 0;
+  content: "";
+  height: 7px;
+  left: -2px;
+  position: absolute;
+  right: -2px;
+  top: -2px;
+}
+
+.login-mascot {
+  align-items: center;
+  background: #fff2bd;
+  border: 2px solid #ffd166;
+  border-radius: 50%;
+  color: #17324d;
+  display: flex;
+  font-size: 28px;
+  font-weight: 900;
+  height: 76px;
+  justify-content: center;
+  margin: 0 auto 2px;
+  width: 76px;
+}
+
+.login-title {
+  text-align: center;
+}
+
+.login-title h2 {
+  font-size: clamp(28px, 7vw, 38px);
+  margin: 2px 0 8px;
 }
 
 label {
@@ -125,9 +173,16 @@ select {
   background: #ffffff;
   border: 1px solid #cfd8e6;
   border-radius: 8px;
-  min-height: 40px;
-  padding: 8px 10px;
+  min-height: 44px;
+  padding: 10px 12px;
   width: 100%;
+}
+
+input:focus,
+select:focus {
+  border-color: #1f76ff;
+  box-shadow: 0 0 0 4px rgba(31, 118, 255, 0.12);
+  outline: none;
 }
 
 .hint {
@@ -143,7 +198,7 @@ select {
 .student-layout {
   display: grid;
   gap: 18px;
-  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
   padding: 24px clamp(18px, 4vw, 48px);
 }
 
@@ -176,9 +231,12 @@ select {
 
 .question-band {
   align-items: center;
-  background: #eef4ff;
-  border-left: 5px solid #1967d2;
+  background: linear-gradient(135deg, #eef6ff, #f5fffb);
+  border: 1px solid #d9e9ff;
+  border-left: 6px solid #1f76ff;
+  border-radius: 8px;
   display: flex;
+  flex-wrap: wrap;
   gap: 14px;
   padding: 18px;
 }
@@ -207,6 +265,7 @@ select {
   font-size: 22px;
   justify-content: center;
   min-height: 64px;
+  word-break: break-word;
 }
 
 .chip.root,
@@ -249,14 +308,84 @@ select {
 }
 
 .leaderboard {
+  background: linear-gradient(180deg, #ffffff, #f8fbff);
+  border-color: #d7e6fb;
+  box-shadow: 0 16px 36px rgba(35, 65, 108, 0.09);
   padding: 18px;
 }
 
 .leaderboard h2 {
   align-items: center;
+  color: #17324d;
   display: flex;
   gap: 8px;
   margin-top: 0;
+}
+
+.leaderboard-table {
+  border-collapse: separate;
+  border-spacing: 0 8px;
+}
+
+.leaderboard-table th,
+.leaderboard-table td {
+  border-bottom: 0;
+}
+
+.leaderboard-table tbody tr {
+  background: #ffffff;
+  box-shadow: 0 8px 18px rgba(24, 33, 47, 0.07);
+}
+
+.leaderboard-table tbody td:first-child {
+  border-radius: 8px 0 0 8px;
+}
+
+.leaderboard-table tbody td:last-child {
+  border-radius: 0 8px 8px 0;
+}
+
+.rank-badge {
+  align-items: center;
+  background: #eaf2ff;
+  border: 1px solid #cfe0ff;
+  border-radius: 999px;
+  color: #174ea6;
+  display: inline-flex;
+  font-weight: 900;
+  height: 30px;
+  justify-content: center;
+  min-width: 30px;
+}
+
+.rank-1 .rank-badge {
+  background: #fff0b8;
+  border-color: #ffd166;
+  color: #7a4b00;
+}
+
+.rank-2 .rank-badge {
+  background: #edf2f7;
+  border-color: #cbd5e1;
+  color: #475569;
+}
+
+.rank-3 .rank-badge {
+  background: #ffe4c7;
+  border-color: #fb923c;
+  color: #8a3a0a;
+}
+
+.score-pill {
+  background: #e9fff8;
+  border: 1px solid #b7f3df;
+  border-radius: 999px;
+  color: #047857;
+  display: inline-flex;
+  font-weight: 900;
+  justify-content: center;
+  min-width: 44px;
+  padding: 5px 10px;
 }
 
 table {
@@ -379,9 +508,96 @@ th {
     flex-direction: column;
   }
 
+  .nav-actions {
+    width: 100%;
+  }
+
+  .nav-actions button {
+    flex: 1 1 130px;
+  }
+
   .word-form,
   .team-form,
   .team-row {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .top-nav {
+    gap: 14px;
+    padding: 14px;
+  }
+
+  .top-nav h1 {
+    font-size: 22px;
+  }
+
+  .student-layout,
+  .admin-layout,
+  .screen-view {
+    padding: 14px;
+  }
+
+  .game-board {
+    gap: 16px;
+    padding: 14px;
+  }
+
+  .status-bar,
+  .control-strip {
+    align-items: stretch;
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .status-bar span,
+  .status-bar strong {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 8px 10px;
+    width: 100%;
+  }
+
+  .question-band {
+    padding: 14px;
+  }
+
+  .question-band strong {
+    font-size: 30px;
+    width: 100%;
+  }
+
+  .chips {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .chip {
+    font-size: 18px;
+    min-height: 54px;
+    padding: 8px;
+  }
+
+  .leaderboard {
+    padding: 14px;
+  }
+
+  th,
+  td {
+    padding: 8px 6px;
+  }
+
+  .leaderboard-table th:nth-child(4),
+  .leaderboard-table td:nth-child(4) {
+    display: none;
+  }
+
+  .login-page {
+    min-height: calc(100vh - 74px);
+    padding: 16px;
+  }
+
+  .login-panel {
+    gap: 14px;
   }
 }

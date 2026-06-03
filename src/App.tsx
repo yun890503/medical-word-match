@@ -345,7 +345,12 @@ function LoginPanel({ onLogin }: { onLogin: (session: Session, state: AppState) 
   return (
     <main className="login-page">
       <form className="login-panel" onSubmit={submit}>
-        <h2>系統登入</h2>
+        <div className="login-mascot" aria-hidden="true">Rx</div>
+        <div className="login-title">
+          <p className="eyebrow">Medical Match</p>
+          <h2>隊伍挑戰登入</h2>
+          <p className="hint">選好隊伍，準備配對字根與字尾。</p>
+        </div>
         <label>帳號<input value={account} onChange={(event) => setAccount(event.target.value)} /></label>
         <label>密碼<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
         {error && <p className="error-text">{error}</p>}
@@ -463,9 +468,9 @@ function LeaderboardPanel({ state, scoreboard, compact }: { state: AppState; sco
       <h2><Trophy size={20} /> 排行榜</h2>
       {!visible && <p className="hint">教師設定為比賽結束後公布。</p>}
       {visible && (
-        <table>
+        <table className="leaderboard-table">
           <thead><tr><th>排名</th><th>隊伍</th><th>分數</th><th>完成時間</th></tr></thead>
-          <tbody>{scoreboard.map((team, index) => <tr key={team.id}><td>{index + 1}</td><td>{team.name}</td><td>{team.score}</td><td>{team.finishTime === Number.MAX_SAFE_INTEGER ? "-" : formatTime(team.finishTime)}</td></tr>)}</tbody>
+          <tbody>{scoreboard.map((team, index) => <tr key={team.id} className={index < 3 ? `rank-${index + 1}` : ""}><td><span className="rank-badge">{index + 1}</span></td><td><strong>{team.name}</strong></td><td><span className="score-pill">{team.score}</span></td><td>{team.finishTime === Number.MAX_SAFE_INTEGER ? "-" : formatTime(team.finishTime)}</td></tr>)}</tbody>
         </table>
       )}
     </aside>
