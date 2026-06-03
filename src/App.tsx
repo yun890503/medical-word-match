@@ -346,11 +346,11 @@ function LoginPanel({ onLogin }: { onLogin: (session: Session, state: AppState) 
     <main className="login-page">
       <form className="login-panel" onSubmit={submit}>
         <h2>系統登入</h2>
-        <label>教師帳號或隊伍名稱<input value={account} onChange={(event) => setAccount(event.target.value)} placeholder="例如 Team1 或自己的隊名" /></label>
-        <label>密碼<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="新隊伍第一次登入時會設定此密碼" /></label>
+        <label>教師帳號或隊伍名稱<input value={account} onChange={(event) => setAccount(event.target.value)} placeholder="例如 admin 或 Team1" /></label>
+        <label>密碼<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="請輸入教師或隊伍密碼" /></label>
         {error && <p className="error-text">{error}</p>}
         <button type="submit" className="primary" disabled={busy}>{busy ? "登入中" : "登入"}</button>
-        <p className="hint">教師：admin/admin123；隊伍第一次登入會建立隊名與密碼。</p>
+        <p className="hint">教師：admin/admin123；隊伍由教師後台建立與管理。</p>
       </form>
     </main>
   );

@@ -143,16 +143,7 @@ app.post("/api/login", asyncRoute(async (request, response) => {
     return;
   }
 
-  if (!password) {
-    response.status(400).json({ message: "Team password is required." });
-    return;
-  }
-
-  const nextTeam = { id: randomUUID(), name: accountName, password, enabled: true };
-  const nextState = await replaceState(db, { ...state, teams: [...state.teams, nextTeam] });
-  const session = createSession("team", nextTeam.id);
-  await broadcastState();
-  response.json({ session, state: sanitizeStateForRole(nextState, "team") });
+  response.status(401).json({ message: "Invalid account or password." });
 }));
 
 app.get("/api/state", asyncRoute(async (request, response) => {
