@@ -421,6 +421,13 @@ function TeamResultOverlay({ rank, result, onClose }: {
   );
 }
 
+function getRankStyle(index: number) {
+  if (index === 0) return { className: "rank-gold", icon: "冠軍獎盃" };
+  if (index === 1) return { className: "rank-silver", icon: "亞軍獎盃" };
+  if (index === 2) return { className: "rank-bronze", icon: "銅牌獎盃" };
+  return { className: "rank-wood", icon: "木牌" };
+}
+
 function GameBoard({ state, setState, team, elapsed, disabled }: {
   state: AppState;
   setState: React.Dispatch<React.SetStateAction<AppState>>;
@@ -504,9 +511,12 @@ function LeaderboardPanel({ state, scoreboard, compact }: { state: AppState; sco
       <h2><Trophy size={20} /> 排行榜</h2>
       {!visible && <p className="hint">教師設定為比賽結束後公布。</p>}
       {visible && (
-        <table>
+        <table className="leaderboard-table">
           <thead><tr><th>排名</th><th>隊伍</th><th>分數</th><th>完成時間</th></tr></thead>
-          <tbody>{scoreboard.map((team, index) => <tr key={team.id}><td>{index + 1}</td><td>{team.name}</td><td>{team.score}</td><td>{team.finishTime === Number.MAX_SAFE_INTEGER ? "-" : formatTime(team.finishTime)}</td></tr>)}</tbody>
+          <tbody>{scoreboard.map((team, index) => {
+            const rankStyle = getRankStyle(index);
+            return <tr key={team.id} className={rankStyle.className}><td><span className="rank-icon">{rankStyle.icon}</span><strong>{index + 1}</strong></td><td>{team.name}</td><td>{team.score}</td><td>{team.finishTime === Number.MAX_SAFE_INTEGER ? "-" : formatTime(team.finishTime)}</td></tr>;
+          })}</tbody>
         </table>
       )}
     </aside>

@@ -332,6 +332,80 @@ select {
   margin-top: 0;
 }
 
+.leaderboard-table {
+  border-collapse: separate;
+  border-spacing: 0 8px;
+}
+
+.leaderboard-table th,
+.leaderboard-table td {
+  border-bottom: 0;
+}
+
+.leaderboard-table tbody tr {
+  color: #18212f;
+}
+
+.leaderboard-table tbody td {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.leaderboard-table tbody td:first-child {
+  border-radius: 8px 0 0 8px;
+}
+
+.leaderboard-table tbody td:last-child {
+  border-radius: 0 8px 8px 0;
+}
+
+.rank-icon {
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 900;
+  margin-right: 8px;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+
+.rank-gold td {
+  background: #fff4c2;
+  border-color: #f4b400;
+}
+
+.rank-gold .rank-icon {
+  background: #f4b400;
+  color: #5f3b00;
+}
+
+.rank-silver td {
+  background: #eef2f7;
+}
+
+.rank-silver .rank-icon {
+  background: #94a3b8;
+  color: #ffffff;
+}
+
+.rank-bronze td {
+  background: #ffead5;
+}
+
+.rank-bronze .rank-icon {
+  background: #c26a2e;
+  color: #ffffff;
+}
+
+.rank-wood td {
+  background: #f3eadb;
+}
+
+.rank-wood .rank-icon {
+  background: #a4754b;
+  color: #ffffff;
+}
+
 table {
   border-collapse: collapse;
   width: 100%;
