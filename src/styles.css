@@ -422,7 +422,7 @@ button.primary {
   width: 126px;
 }
 
-.dog-bowl span::before {
+/* .dog-bowl span::before {
   color: #fff8df;
   content: "骨";
   font-size: 34px;
@@ -430,7 +430,7 @@ button.primary {
   left: 72px;
   position: absolute;
   top: 34px;
-}
+} */
 
 .doodle-arrow {
   color: #8e3d18;
