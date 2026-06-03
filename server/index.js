@@ -110,7 +110,7 @@ app.post("/api/login", asyncRoute(async (request, response) => {
   const state = await readState(db);
   const accountName = String(request.body.account || "").trim();
   const account = accountName.toLowerCase();
-  const password = String(request.body.password || "");
+  const password = String(request.body.password || "").trim();
   if (!accountName) {
     response.status(400).json({ message: "Account name is required." });
     return;
@@ -134,12 +134,21 @@ app.post("/api/login", asyncRoute(async (request, response) => {
       response.status(401).json({ message: "Team is disabled." });
       return;
     }
+    if (!team.password || team.password !== password) {
+      response.status(401).json({ message: "Invalid team password." });
+      return;
+    }
     const session = createSession("team", team.id);
     response.json({ session, state: sanitizeStateForRole(await getEffectiveState(), "team") });
     return;
   }
 
-  const nextTeam = { id: randomUUID(), name: accountName, password: "", enabled: true };
+  if (!password) {
+    response.status(400).json({ message: "Team password is required." });
+    return;
+  }
+
+  const nextTeam = { id: randomUUID(), name: accountName, password, enabled: true };
   const nextState = await replaceState(db, { ...state, teams: [...state.teams, nextTeam] });
   const session = createSession("team", nextTeam.id);
   await broadcastState();

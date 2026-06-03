@@ -308,12 +308,12 @@ th {
 
 .team-row {
   align-items: center;
-  grid-template-columns: 1fr auto auto auto;
+  grid-template-columns: 1fr 1fr auto auto auto;
 }
 
 .team-form {
   align-items: center;
-  grid-template-columns: 1fr auto auto auto;
+  grid-template-columns: 1fr 1fr auto auto auto;
 }
 
 .inline-check {

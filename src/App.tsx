@@ -74,7 +74,7 @@ const defaultState: AppState = {
   teams: Array.from({ length: 7 }, (_, index) => ({
     id: `team-${index + 1}`,
     name: `Team${index + 1}`,
-    password: "",
+    password: `team${index + 1}`,
     enabled: true,
   })),
   teachers: [{ id: "teacher-admin", name: "系統管理教師", username: "admin", password: "admin123", enabled: true }],
@@ -330,7 +330,7 @@ function LoginPanel({ onLogin }: { onLogin: (session: Session, state: AppState) 
         body: JSON.stringify({ account, password }),
       });
       if (!response.ok) {
-        setError("登入失敗：教師請確認密碼；隊伍請確認是否已被停用。");
+        setError("登入失敗：請確認密碼是否正確，或隊伍是否已被停用。");
         return;
       }
       const result = await response.json() as { session: Session; state: AppState };
@@ -347,10 +347,10 @@ function LoginPanel({ onLogin }: { onLogin: (session: Session, state: AppState) 
       <form className="login-panel" onSubmit={submit}>
         <h2>系統登入</h2>
         <label>教師帳號或隊伍名稱<input value={account} onChange={(event) => setAccount(event.target.value)} placeholder="例如 Team1 或自己的隊名" /></label>
-        <label>教師密碼<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="隊伍登入免填" /></label>
+        <label>密碼<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="新隊伍第一次登入時會設定此密碼" /></label>
         {error && <p className="error-text">{error}</p>}
         <button type="submit" className="primary" disabled={busy}>{busy ? "登入中" : "登入"}</button>
-        <p className="hint">教師：admin/admin123；隊伍只要輸入隊名，若不存在會自動建立。</p>
+        <p className="hint">教師：admin/admin123；隊伍第一次登入會建立隊名與密碼。</p>
       </form>
     </main>
   );
@@ -481,7 +481,7 @@ function AdminView({ state, setState, remaining, scoreboard, currentTeacherId }:
 }) {
   const nextTeamNumber = getNextTeamNumber(state.teams);
   const [wordDraft, setWordDraft] = useState<WordItem>({ id: "", chinese: "", word: "", root: "", suffix: "" });
-  const [teamDraft, setTeamDraft] = useState<Team>({ id: "", name: `Team${nextTeamNumber}`, password: "", enabled: true });
+  const [teamDraft, setTeamDraft] = useState<Team>({ id: "", name: `Team${nextTeamNumber}`, password: `team${nextTeamNumber}`, enabled: true });
   const [teacherDraft, setTeacherDraft] = useState<Teacher>({ id: "", name: "", username: "", password: "", enabled: true });
   const [teacherError, setTeacherError] = useState("");
   const [teamError, setTeamError] = useState("");
@@ -500,8 +500,9 @@ function AdminView({ state, setState, remaining, scoreboard, currentTeacherId }:
   function saveTeam(event: FormEvent) {
     event.preventDefault();
     const name = teamDraft.name.trim();
-    if (!name) {
-      setTeamError("請輸入隊伍名稱。");
+    const password = (teamDraft.password ?? "").trim();
+    if (!name || !password) {
+      setTeamError("請輸入隊伍名稱與密碼。");
       return;
     }
     const duplicate = state.teams.some((team) => team.id !== teamDraft.id && normalize(team.name) === normalize(name));
@@ -509,10 +510,10 @@ function AdminView({ state, setState, remaining, scoreboard, currentTeacherId }:
       setTeamError("隊伍名稱已存在。");
       return;
     }
-    const next = { ...teamDraft, id: teamDraft.id || crypto.randomUUID(), name, password: "" };
+    const next = { ...teamDraft, id: teamDraft.id || crypto.randomUUID(), name, password };
     setState((current) => ({ ...current, teams: teamDraft.id ? current.teams.map((team) => team.id === teamDraft.id ? next : team) : [...current.teams, next] }));
     const nextNumber = getNextTeamNumber([...state.teams, next]);
-    setTeamDraft({ id: "", name: `Team${nextNumber}`, password: "", enabled: true });
+    setTeamDraft({ id: "", name: `Team${nextNumber}`, password: `team${nextNumber}`, enabled: true });
     setTeamError("");
   }
   function deleteTeam(teamId: string) {
@@ -667,12 +668,13 @@ function AdminView({ state, setState, remaining, scoreboard, currentTeacherId }:
           <h2>隊伍管理</h2>
           <form className="team-form" onSubmit={saveTeam}>
             <input placeholder="隊伍名稱" value={teamDraft.name} onChange={(event) => setTeamDraft({ ...teamDraft, name: event.target.value })} required />
+            <input placeholder="密碼" value={teamDraft.password ?? ""} onChange={(event) => setTeamDraft({ ...teamDraft, password: event.target.value })} required />
             <label className="inline-check"><input type="checkbox" checked={teamDraft.enabled} onChange={(event) => setTeamDraft({ ...teamDraft, enabled: event.target.checked })} />啟用</label>
             <button className="primary" type="submit">{teamDraft.id ? "儲存隊伍" : "新增隊伍"}</button>
-            {teamDraft.id && <button type="button" onClick={() => { const nextNumber = getNextTeamNumber(state.teams); setTeamDraft({ id: "", name: `Team${nextNumber}`, password: "", enabled: true }); setTeamError(""); }}>取消</button>}
+            {teamDraft.id && <button type="button" onClick={() => { const nextNumber = getNextTeamNumber(state.teams); setTeamDraft({ id: "", name: `Team${nextNumber}`, password: `team${nextNumber}`, enabled: true }); setTeamError(""); }}>取消</button>}
           </form>
           {teamError && <p className="error-text">{teamError}</p>}
-          {state.teams.map((team) => <div className="team-row" key={team.id}><input value={team.name} onChange={(event) => setState({ ...state, teams: state.teams.map((item) => item.id === team.id ? { ...item, name: event.target.value, password: "" } : item) })} /><label className="inline-check"><input type="checkbox" checked={team.enabled} onChange={(event) => setState({ ...state, teams: state.teams.map((item) => item.id === team.id ? { ...item, enabled: event.target.checked } : item) })} />啟用</label><button onClick={() => setTeamDraft({ ...team, password: "" })}>修改</button><button onClick={() => deleteTeam(team.id)}>刪除</button></div>)}
+          {state.teams.map((team) => <div className="team-row" key={team.id}><input value={team.name} onChange={(event) => setState({ ...state, teams: state.teams.map((item) => item.id === team.id ? { ...item, name: event.target.value } : item) })} /><input value={team.password ?? ""} onChange={(event) => setState({ ...state, teams: state.teams.map((item) => item.id === team.id ? { ...item, password: event.target.value } : item) })} /><label className="inline-check"><input type="checkbox" checked={team.enabled} onChange={(event) => setState({ ...state, teams: state.teams.map((item) => item.id === team.id ? { ...item, enabled: event.target.checked } : item) })} />啟用</label><button onClick={() => setTeamDraft(team)}>修改</button><button onClick={() => deleteTeam(team.id)}>刪除</button></div>)}
         </div>
         <div className="panel">
           <h2>教師帳號管理</h2>
