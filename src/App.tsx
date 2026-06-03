@@ -355,14 +355,35 @@ function LoginPanel({ onLogin }: { onLogin: (session: Session, state: AppState) 
 
   return (
     <main className="login-page">
-      <form className="login-panel" onSubmit={submit}>
-        <h2>系統登入</h2>
-        <label>教師帳號或隊伍名稱<input value={account} onChange={(event) => setAccount(event.target.value)} placeholder="例如 admin 或 Team1" /></label>
-        <label>密碼<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="請輸入教師或隊伍密碼" /></label>
-        {error && <p className="error-text">{error}</p>}
-        <button type="submit" className="primary" disabled={busy}>{busy ? "登入中" : "登入"}</button>
-        <p className="hint">教師：admin/admin123；隊伍由教師後台建立與管理。</p>
-      </form>
+      <section className="login-scene" aria-label="字根拼拼樂登入">
+        <div className="login-goals">
+          <strong>遊戲目標：</strong>
+          <span>1.認識英文單字結構（字根加字尾）</span>
+          <span>2.練習單字組合與理解能力</span>
+          <span>3.加強字彙記憶與猜解能力</span>
+        </div>
+        <div className="cat-doodle cat-top" aria-hidden="true"><span></span></div>
+        <div className="cat-doodle cat-left" aria-hidden="true"><span></span></div>
+        <div className="pup pup-small" aria-hidden="true"><span></span></div>
+        <div className="pup pup-main" aria-hidden="true"><span></span></div>
+        <div className="dog-bowl" aria-hidden="true"><span></span></div>
+        <div className="doodle-arrow arrow-left" aria-hidden="true">↜</div>
+        <div className="doodle-arrow arrow-right" aria-hidden="true">↷</div>
+        <div className="doodle-star star-one" aria-hidden="true">★</div>
+        <div className="doodle-star star-two" aria-hidden="true">★</div>
+        <div className="title-cloud">
+          <p>Medical English Competition</p>
+          <h2>字根拼拼樂</h2>
+        </div>
+        <form className="login-panel" onSubmit={submit}>
+          <h2>系統登入</h2>
+          <label>教師帳號或隊伍名稱<input value={account} onChange={(event) => setAccount(event.target.value)} placeholder="例如 admin 或 Team1" /></label>
+          <label>密碼<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="請輸入教師或隊伍密碼" /></label>
+          {error && <p className="error-text">{error}</p>}
+          <button type="submit" className="primary" disabled={busy}>{busy ? "登入中" : "登入"}</button>
+          <p className="hint">教師：admin/admin123；隊伍由教師後台建立與管理。</p>
+        </form>
+      </section>
     </main>
   );
 }
