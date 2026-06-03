@@ -1,5 +1,5 @@
 import { ChangeEvent, DragEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { Download, FileDown, FileSpreadsheet, LogOut, Monitor, Pause, Play, Settings, Trophy, Users } from "lucide-react";
+import { BookOpen, ClipboardPlus, Download, Eye, EyeOff, FileDown, FileSpreadsheet, HelpCircle, LockKeyhole, LogOut, Medal, Microscope, Monitor, Pause, Play, Puzzle, Settings, Star, Target, Trophy, UserRound, Users } from "lucide-react";
 import jsPDF from "jspdf";
 import * as XLSX from "xlsx";
 import { io } from "socket.io-client";
@@ -329,6 +329,7 @@ function LoginPanel({ onLogin }: { onLogin: (session: Session, state: AppState) 
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -355,14 +356,38 @@ function LoginPanel({ onLogin }: { onLogin: (session: Session, state: AppState) 
 
   return (
     <main className="login-page">
-      <form className="login-panel" onSubmit={submit}>
-        <h2>系統登入</h2>
-        <label>教師帳號或隊伍名稱<input value={account} onChange={(event) => setAccount(event.target.value)} placeholder="例如 admin 或 Team1" /></label>
-        <label>密碼<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="請輸入教師或隊伍密碼" /></label>
-        {error && <p className="error-text">{error}</p>}
-        <button type="submit" className="primary" disabled={busy}>{busy ? "登入中" : "登入"}</button>
-        <p className="hint">教師：admin/admin123；隊伍由教師後台建立與管理。</p>
-      </form>
+      <button className="help-button" type="button"><HelpCircle size={24} /> 使用說明</button>
+      <aside className="challenge-ribbon"><Trophy size={48} /><strong>挑戰知識</strong><span>贏得榮耀！</span></aside>
+      <section className="login-hero" aria-label="醫學英文競賽登入">
+        <div className="hero-banner">MEDICAL ENGLISH COMPETITION</div>
+        <div className="hero-title">
+          <span>醫學英文</span>
+          <strong>字根字尾配對競賽系統</strong>
+        </div>
+        <div className="character character-left">
+          <div className="character-head">Dr.</div>
+          <div className="character-body"><ClipboardPlus size={44} /><span>字根大師</span></div>
+        </div>
+        <form className="login-panel game-login-panel" onSubmit={submit}>
+          <div className="login-lock-title"><LockKeyhole size={30} /> 系統登入</div>
+          <label><span><UserRound size={18} /> 教師帳號或隊伍名稱</span><input value={account} onChange={(event) => setAccount(event.target.value)} placeholder="例如 admin 或 Team1" /></label>
+          <label><span><LockKeyhole size={18} /> 密碼</span><div className="password-field"><input type={showPassword ? "text" : "password"} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="請輸入教師或隊伍密碼" /><button type="button" className="icon-button password-toggle" onClick={() => setShowPassword((value) => !value)}>{showPassword ? <EyeOff size={20} /> : <Eye size={20} />}</button></div></label>
+          {error && <p className="error-text">{error}</p>}
+          <button type="submit" className="primary login-submit" disabled={busy}><Star size={30} />{busy ? "登入中" : "登入"}</button>
+          <p className="login-note">教師：admin/admin123；隊伍由教師後台建立與管理。</p>
+        </form>
+        <div className="character character-right">
+          <div className="character-head">Rx</div>
+          <div className="character-body"><Microscope size={44} /><span>配對高手</span></div>
+        </div>
+        <div className="login-feature-row">
+          <div><Target size={34} /><strong>字根配對</strong><span>強化字根能力</span></div>
+          <div><Puzzle size={34} /><strong>字尾挑戰</strong><span>提升字尾理解</span></div>
+          <div><Medal size={34} /><strong>競賽排行</strong><span>挑戰全校排行</span></div>
+        </div>
+        <BookOpen className="floating-icon book" size={76} />
+        <ClipboardPlus className="floating-icon clipboard" size={76} />
+      </section>
     </main>
   );
 }
