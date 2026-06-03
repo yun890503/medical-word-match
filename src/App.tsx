@@ -376,6 +376,9 @@ function StudentView({ state, setState, team, remaining, elapsed, scoreboard }: 
   scoreboard: ReturnType<typeof buildScoreboard>;
 }) {
   const score = scoreboard.find((item) => item.id === team.id)?.score ?? 0;
+  const rankIndex = scoreboard.findIndex((item) => item.id === team.id);
+  const rank = rankIndex >= 0 ? rankIndex + 1 : null;
+  const result = rankIndex >= 0 ? scoreboard[rankIndex] : null;
   return (
     <main className="student-layout">
       <section className="game-panel">
@@ -387,7 +390,26 @@ function StudentView({ state, setState, team, remaining, elapsed, scoreboard }: 
         <GameBoard state={state} setState={setState} team={team} elapsed={elapsed} disabled={state.status !== "running" || remaining <= 0} />
       </section>
       <LeaderboardPanel state={state} scoreboard={scoreboard} compact={false} />
+      {state.status === "ended" && rank && result && <TeamResultOverlay rank={rank} result={result} />}
     </main>
+  );
+}
+
+function TeamResultOverlay({ rank, result }: {
+  rank: number;
+  result: ReturnType<typeof buildScoreboard>[number];
+}) {
+  const medal = rank === 1 ? { label: "金牌", className: "gold" } : rank === 2 ? { label: "銀牌", className: "silver" } : rank === 3 ? { label: "銅牌", className: "bronze" } : null;
+  return (
+    <div className="result-overlay" role="status" aria-live="polite">
+      <div className="result-card">
+        {medal ? <div className={`medal ${medal.className}`}>{medal.label}</div> : <div className="medal standard">完成</div>}
+        <p className="eyebrow">比賽結果</p>
+        <h2>{result.name} 第 {rank} 名</h2>
+        <p className="result-score">得分 {result.score} 分</p>
+        <p className="hint">完成時間：{result.finishTime === Number.MAX_SAFE_INTEGER ? "-" : formatTime(result.finishTime)}</p>
+      </div>
+    </div>
   );
 }
 
