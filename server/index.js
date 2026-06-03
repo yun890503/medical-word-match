@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import { Server } from "socket.io";
-import { createDatabase, mergeTeamRecords, readState, replaceState, resetDatabase } from "./database.js";
+import { clearTeamSession, createDatabase, mergeTeamRecords, readState, replaceState, resetDatabase, setTeamSession } from "./database.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
@@ -33,10 +33,14 @@ function mergeIncomingState(currentState, incomingState) {
 }
 
 function sanitizeStateForRole(nextState, role) {
-  if (role === "teacher") return nextState;
-  return {
+  const withoutSessionTokens = {
     ...nextState,
-    teams: nextState.teams.map(({ password, ...team }) => team),
+    teams: nextState.teams.map(({ activeSessionToken, ...team }) => team),
+  };
+  if (role === "teacher") return withoutSessionTokens;
+  return {
+    ...withoutSessionTokens,
+    teams: withoutSessionTokens.teams.map(({ password, activeSessionAt, activeSessionMatchStartedAt, loginLocked, ...team }) => team),
     teachers: [],
   };
 }
@@ -59,6 +63,18 @@ function createSession(role, id) {
   return session;
 }
 
+function findSessionTeam(state, session) {
+  if (session?.role !== "team") return null;
+  return state.teams.find((team) => team.id === session.id) || null;
+}
+
+function isSessionCurrent(state, session) {
+  if (!session) return false;
+  if (session.role === "teacher") return true;
+  const team = findSessionTeam(state, session);
+  return Boolean(team?.loginLocked && team.activeSessionToken === session.token);
+}
+
 async function getEffectiveState() {
   let current = await readState(db);
   if (current.status !== "running" || !current.startedAt) return current;
@@ -74,8 +90,14 @@ async function mergeTeamSubmission(currentState, incomingState, teamId) {
 }
 
 async function broadcastState() {
+  const state = await getEffectiveState();
   for (const socket of io.sockets.sockets.values()) {
-    socket.emit("state", sanitizeStateForRole(await getEffectiveState(), socket.data.session?.role));
+    if (socket.data.session?.role === "team" && !isSessionCurrent(state, socket.data.session)) {
+      socket.emit("session-expired", { message: "此隊伍已在其他裝置登入，請回到登入頁。" });
+      socket.disconnect(true);
+      continue;
+    }
+    socket.emit("state", sanitizeStateForRole(state, socket.data.session?.role));
   }
 }
 
@@ -107,7 +129,7 @@ function asyncRoute(handler) {
 }
 
 app.post("/api/login", asyncRoute(async (request, response) => {
-  const state = await readState(db);
+  const state = await getEffectiveState();
   const accountName = String(request.body.account || "").trim();
   const account = accountName.toLowerCase();
   const password = String(request.body.password || "").trim();
@@ -138,7 +160,13 @@ app.post("/api/login", asyncRoute(async (request, response) => {
       response.status(401).json({ message: "Invalid team password." });
       return;
     }
+    if ((state.status === "running" || state.status === "paused") && team.loginLocked) {
+      response.status(409).json({ message: "此隊伍正在其他裝置作答。比賽中若要換裝置，請老師先到後台解除登入鎖。" });
+      return;
+    }
     const session = createSession("team", team.id);
+    await setTeamSession(db, team.id, session.token, state.startedAt);
+    await broadcastState();
     response.json({ session, state: sanitizeStateForRole(await getEffectiveState(), "team") });
     return;
   }
@@ -148,7 +176,12 @@ app.post("/api/login", asyncRoute(async (request, response) => {
 
 app.get("/api/state", asyncRoute(async (request, response) => {
   const session = getSession(request);
-  response.json(sanitizeStateForRole(await getEffectiveState(), session?.role));
+  const state = await getEffectiveState();
+  if (session?.role === "team" && !isSessionCurrent(state, session)) {
+    response.status(409).json({ message: "此隊伍已在其他裝置登入，請重新登入。" });
+    return;
+  }
+  response.json(sanitizeStateForRole(state, session?.role));
 }));
 
 app.post("/api/state", asyncRoute(async (request, response) => {
@@ -159,11 +192,27 @@ app.post("/api/state", asyncRoute(async (request, response) => {
   }
 
   const current = await getEffectiveState();
+  if (session.role === "team" && !isSessionCurrent(current, session)) {
+    response.status(409).json({ message: "此隊伍已在其他裝置登入，請重新登入。" });
+    return;
+  }
   const state = session.role === "teacher"
     ? await replaceState(db, mergeIncomingState(current, request.body))
     : await mergeTeamSubmission(current, request.body, session.id);
   await broadcastState();
   response.json(sanitizeStateForRole(state, session.role));
+}));
+
+app.post("/api/teams/:teamId/unlock", asyncRoute(async (request, response) => {
+  const session = getSession(request);
+  if (session?.role !== "teacher") {
+    response.status(403).json({ message: "Teacher permission required." });
+    return;
+  }
+  await clearTeamSession(db, request.params.teamId);
+  const state = await getEffectiveState();
+  await broadcastState();
+  response.json(sanitizeStateForRole(state, "teacher"));
 }));
 
 app.post("/api/reset", asyncRoute(async (_request, response) => {
@@ -183,7 +232,14 @@ io.on("connection", (socket) => {
   const token = socket.handshake.auth?.token || socket.handshake.query?.token;
   socket.data.session = token ? sessions.get(token) : null;
   getEffectiveState()
-    .then((state) => socket.emit("state", sanitizeStateForRole(state, socket.data.session?.role)))
+    .then((state) => {
+      if (socket.data.session?.role === "team" && !isSessionCurrent(state, socket.data.session)) {
+        socket.emit("session-expired", { message: "此隊伍已在其他裝置登入，請回到登入頁。" });
+        socket.disconnect(true);
+        return;
+      }
+      socket.emit("state", sanitizeStateForRole(state, socket.data.session?.role));
+    })
     .catch((error) => socket.emit("state-error", { message: error.message }));
 });
 

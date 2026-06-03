@@ -87,10 +87,25 @@ async function initializeSchema(pool) {
       name VARCHAR(120) NOT NULL UNIQUE,
       password VARCHAR(255) NOT NULL,
       enabled TINYINT(1) NOT NULL DEFAULT 1,
+      active_session_token VARCHAR(120) NULL,
+      active_session_at BIGINT NULL,
+      active_session_match_started_at BIGINT NULL,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
   `);
+
+  for (const statement of [
+    "ALTER TABLE teams ADD COLUMN active_session_token VARCHAR(120) NULL",
+    "ALTER TABLE teams ADD COLUMN active_session_at BIGINT NULL",
+    "ALTER TABLE teams ADD COLUMN active_session_match_started_at BIGINT NULL",
+  ]) {
+    try {
+      await pool.query(statement);
+    } catch (error) {
+      if (error.code !== "ER_DUP_FIELDNAME") throw error;
+    }
+  }
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS teachers (
@@ -165,7 +180,15 @@ export async function readState(pool) {
   const [[settings], [match], [teams], [teachers], [records]] = await Promise.all([
     pool.query("SELECT * FROM settings WHERE id = 1"),
     pool.query("SELECT * FROM match_state WHERE id = 1"),
-    pool.query("SELECT id, name, password, enabled FROM teams ORDER BY created_at, id"),
+    pool.query(`
+      SELECT id, name, password, enabled,
+        active_session_token AS activeSessionToken,
+        active_session_at AS activeSessionAt,
+        active_session_match_started_at AS activeSessionMatchStartedAt,
+        active_session_token IS NOT NULL AS loginLocked
+      FROM teams
+      ORDER BY created_at, id
+    `),
     pool.query("SELECT id, name, username, password, enabled FROM teachers ORDER BY created_at, id"),
     pool.query(`
       SELECT id, team_id AS teamId, team_name AS teamName, question_id AS questionId,
@@ -178,7 +201,7 @@ export async function readState(pool) {
 
   return normalizeState({
     words: questionBank,
-    teams: teams.map((team) => ({ ...team, enabled: intToBool(team.enabled) })),
+    teams: teams.map((team) => ({ ...team, enabled: intToBool(team.enabled), loginLocked: intToBool(team.loginLocked) })),
     teachers: teachers.map((teacher) => ({ ...teacher, enabled: intToBool(teacher.enabled) })),
     settings: settings[0] ? {
       questionCount: settings[0].question_count,
@@ -201,6 +224,14 @@ export async function replaceState(pool, incomingState) {
 
   try {
     await connection.beginTransaction();
+    const [existingTeams] = await connection.query(`
+      SELECT id,
+        active_session_token AS activeSessionToken,
+        active_session_at AS activeSessionAt,
+        active_session_match_started_at AS activeSessionMatchStartedAt
+      FROM teams
+    `);
+    const activeSessions = new Map(existingTeams.map((team) => [team.id, team]));
     await connection.query("DELETE FROM answer_records");
     await connection.query("DELETE FROM teams");
     await connection.query("DELETE FROM teachers");
@@ -208,9 +239,20 @@ export async function replaceState(pool, incomingState) {
     await connection.query("DELETE FROM match_state");
 
     for (const team of state.teams) {
+      const activeSession = activeSessions.get(team.id) || {};
       await connection.query(
-        "INSERT INTO teams (id, name, password, enabled) VALUES (?, ?, ?, ?)",
-        [team.id || randomUUID(), team.name, team.password || "", boolToInt(team.enabled)],
+        `INSERT INTO teams
+          (id, name, password, enabled, active_session_token, active_session_at, active_session_match_started_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          team.id || randomUUID(),
+          team.name,
+          team.password || "",
+          boolToInt(team.enabled),
+          team.activeSessionToken ?? activeSession.activeSessionToken ?? null,
+          team.activeSessionAt ?? activeSession.activeSessionAt ?? null,
+          team.activeSessionMatchStartedAt ?? activeSession.activeSessionMatchStartedAt ?? null,
+        ],
       );
     }
 
@@ -298,7 +340,31 @@ export async function mergeTeamRecords(pool, teamId, records) {
   return readState(pool);
 }
 
-export function resetDatabase(pool) {
+export async function readTeamSession(pool, teamId) {
+  const [rows] = await pool.query(
+    "SELECT active_session_token AS activeSessionToken FROM teams WHERE id = ?",
+    [teamId],
+  );
+  return rows[0] || null;
+}
+
+export async function setTeamSession(pool, teamId, token, matchStartedAt) {
+  await pool.query(
+    "UPDATE teams SET active_session_token = ?, active_session_at = ?, active_session_match_started_at = ? WHERE id = ?",
+    [token, Date.now(), matchStartedAt ?? null, teamId],
+  );
+}
+
+export async function clearTeamSession(pool, teamId) {
+  await pool.query(
+    "UPDATE teams SET active_session_token = NULL, active_session_at = NULL, active_session_match_started_at = NULL WHERE id = ?",
+    [teamId],
+  );
+}
+
+export async function resetDatabase(pool) {
   questionBank = defaultState.words;
-  return replaceState(pool, defaultState);
+  await replaceState(pool, defaultState);
+  await pool.query("UPDATE teams SET active_session_token = NULL, active_session_at = NULL, active_session_match_started_at = NULL");
+  return readState(pool);
 }

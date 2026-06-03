@@ -808,7 +808,7 @@ th {
 
 .team-row {
   align-items: center;
-  grid-template-columns: 1fr 1fr auto auto auto;
+  grid-template-columns: 1fr 1fr auto auto auto auto auto;
 }
 
 .team-form {
@@ -825,6 +825,24 @@ th {
 
 .inline-check input {
   width: auto;
+}
+
+.lock-status {
+  background: #eef4ff;
+  border: 1px solid #cbd9f2;
+  border-radius: 999px;
+  color: #53627a;
+  font-size: 13px;
+  font-weight: 800;
+  justify-self: start;
+  padding: 7px 10px;
+  white-space: nowrap;
+}
+
+.lock-status.locked {
+  background: #fff4d8;
+  border-color: #e6bf66;
+  color: #8a5d00;
 }
 
 .file-button {

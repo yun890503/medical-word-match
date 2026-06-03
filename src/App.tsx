@@ -5,7 +5,7 @@ import * as XLSX from "xlsx";
 import { io } from "socket.io-client";
 
 type WordItem = { id: string; word: string; chinese: string; root: string; suffix: string };
-type Team = { id: string; name: string; password?: string; enabled: boolean };
+type Team = { id: string; name: string; password?: string; enabled: boolean; loginLocked?: boolean; activeSessionAt?: number | null; activeSessionMatchStartedAt?: number | null };
 type Teacher = { id: string; name: string; username: string; password?: string; enabled: boolean };
 type Session = { role: "team" | "teacher"; id: string; token: string };
 type MatchStatus = "waiting" | "running" | "paused" | "ended";
@@ -45,6 +45,7 @@ type AppState = {
 };
 
 const STORAGE_KEY = "medical-root-suffix-match-state";
+const SESSION_KEY = "medical-root-suffix-match-session";
 
 function getApiOrigin() {
   if (typeof window === "undefined") return "http://localhost:3001";
@@ -117,6 +118,22 @@ function loadState(): AppState {
 
 function persistLocalState(state: AppState) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function loadSession(): Session | null {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const session = JSON.parse(raw) as Session;
+    return session?.token && session?.role && session?.id ? session : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistSession(session: Session | null) {
+  if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  else localStorage.removeItem(SESSION_KEY);
 }
 
 function authHeaders(token?: string): Record<string, string> {
@@ -203,9 +220,10 @@ function getNextTeamNumber(teams: Team[]) {
 
 function App() {
   const [state, setLocalState] = useState<AppState>(loadState);
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSession] = useState<Session | null>(loadSession);
   const [view, setView] = useState<View>("student");
   const [now, setNow] = useState(Date.now());
+  const [loginNotice, setLoginNotice] = useState("");
 
   useEffect(() => {
     const token = session?.token;
@@ -213,9 +231,18 @@ function App() {
     const socket = io(API_ORIGIN, { auth: token ? { token } : undefined });
 
     fetch(API_STATE_URL, { headers: authHeaders(token) })
-      .then((response) => response.json())
-      .then((remoteState: Partial<AppState>) => {
-        if (cancelled) return;
+      .then(async (response) => {
+        if (response.status === 409) {
+          const result = await response.json().catch(() => ({ message: "此隊伍已在其他裝置登入，請重新登入。" }));
+          setLoginNotice(result.message);
+          persistSession(null);
+          setSession(null);
+          return null;
+        }
+        return response.ok ? response.json() : null;
+      })
+      .then((remoteState: Partial<AppState> | null) => {
+        if (!remoteState || cancelled) return;
         const next = normalizeState(remoteState);
         persistLocalState(next);
         setLocalState(next);
@@ -226,6 +253,12 @@ function App() {
       const next = normalizeState(remoteState);
       persistLocalState(next);
       setLocalState(next);
+    });
+    socket.on("session-expired", (payload: { message?: string }) => {
+      setLoginNotice(payload.message || "此隊伍已在其他裝置登入，請重新登入。");
+      persistSession(null);
+      setSession(null);
+      setView("student");
     });
 
     return () => {
@@ -242,6 +275,12 @@ function App() {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders(session?.token) },
         body: JSON.stringify(next),
+      }).then(async (response) => {
+        if (response.status !== 409) return;
+        const result = await response.json().catch(() => ({ message: "此隊伍已在其他裝置登入，請重新登入。" }));
+        setLoginNotice(result.message);
+        persistSession(null);
+        setSession(null);
       }).catch(() => undefined);
       return next;
     });
@@ -273,11 +312,14 @@ function App() {
     const normalized = normalizeState(nextState);
     persistLocalState(normalized);
     setLocalState(normalized);
+    setLoginNotice("");
+    persistSession(nextSession);
     setSession(nextSession);
     setView(nextSession.role === "teacher" ? "admin" : "student");
   }
 
   function logout() {
+    persistSession(null);
     setSession(null);
     setView("student");
   }
@@ -286,7 +328,7 @@ function App() {
     return (
       <div className="app-shell">
         <Header session={null} view={view} setView={setView} onLogout={logout} />
-        <LoginPanel onLogin={handleLogin} />
+        <LoginPanel onLogin={handleLogin} notice={loginNotice} />
       </div>
     );
   }
@@ -298,7 +340,7 @@ function App() {
         <StudentView state={state} setState={setState} team={currentTeam} remaining={remaining} elapsed={elapsed} scoreboard={scoreboard} />
       )}
       {session.role === "teacher" && view === "admin" && currentTeacher && (
-        <AdminView state={state} setState={setState} remaining={remaining} scoreboard={scoreboard} currentTeacherId={currentTeacher.id} />
+        <AdminView state={state} setState={setState} remaining={remaining} scoreboard={scoreboard} currentTeacherId={currentTeacher.id} authToken={session.token} />
       )}
       {view === "screen" && <ScreenView state={state} remaining={remaining} scoreboard={scoreboard} />}
     </div>
@@ -324,7 +366,7 @@ function Header({ session, view, setView, onLogout }: { session: Session | null;
   );
 }
 
-function LoginPanel({ onLogin }: { onLogin: (session: Session, state: AppState) => void }) {
+function LoginPanel({ onLogin, notice }: { onLogin: (session: Session, state: AppState) => void; notice?: string }) {
   const [account, setAccount] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -341,7 +383,8 @@ function LoginPanel({ onLogin }: { onLogin: (session: Session, state: AppState) 
         body: JSON.stringify({ account, password }),
       });
       if (!response.ok) {
-        setError("登入失敗：請確認密碼是否正確，或隊伍是否已被停用。");
+        const result = await response.json().catch(() => ({ message: "登入失敗：請確認密碼是否正確，或隊伍是否已被停用。" }));
+        setError(result.message || "登入失敗：請確認密碼是否正確，或隊伍是否已被停用。");
         return;
       }
       const result = await response.json() as { session: Session; state: AppState };
@@ -379,6 +422,7 @@ function LoginPanel({ onLogin }: { onLogin: (session: Session, state: AppState) 
           <h2>系統登入</h2>
           <label>教師帳號或隊伍名稱<input value={account} onChange={(event) => setAccount(event.target.value)} placeholder="例如 admin 或 Team1" /></label>
           <label>密碼<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="請輸入教師或隊伍密碼" /></label>
+          {notice && <p className="hint">{notice}</p>}
           {error && <p className="error-text">{error}</p>}
           <button type="submit" className="primary" disabled={busy}>{busy ? "登入中" : "登入"}</button>
           <p className="hint">教師：admin/admin123；隊伍由教師後台建立與管理。</p>
@@ -560,12 +604,13 @@ function LeaderboardPanel({ state, scoreboard, compact }: { state: AppState; sco
   );
 }
 
-function AdminView({ state, setState, remaining, scoreboard, currentTeacherId }: {
+function AdminView({ state, setState, remaining, scoreboard, currentTeacherId, authToken }: {
   state: AppState;
   setState: React.Dispatch<React.SetStateAction<AppState>>;
   remaining: number;
   scoreboard: ReturnType<typeof buildScoreboard>;
   currentTeacherId: string;
+  authToken: string;
 }) {
   const nextTeamNumber = getNextTeamNumber(state.teams);
   const [wordDraft, setWordDraft] = useState<WordItem>({ id: "", chinese: "", word: "", root: "", suffix: "" });
@@ -610,6 +655,23 @@ function AdminView({ state, setState, remaining, scoreboard, currentTeacherId }:
       teams: current.teams.filter((team) => team.id !== teamId),
       records: current.records.filter((record) => record.teamId !== teamId),
     }));
+  }
+  async function unlockTeam(teamId: string) {
+    setTeamError("");
+    try {
+      const response = await fetch(`${API_ORIGIN}/api/teams/${teamId}/unlock`, {
+        method: "POST",
+        headers: authHeaders(authToken),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        setTeamError(result.message || "解除登入鎖失敗。");
+        return;
+      }
+      setState(normalizeState(result));
+    } catch {
+      setTeamError("解除登入鎖失敗，請確認後端服務是否正常。");
+    }
   }
   function saveWord(event: FormEvent) {
     event.preventDefault();
@@ -762,7 +824,17 @@ function AdminView({ state, setState, remaining, scoreboard, currentTeacherId }:
             {teamDraft.id && <button type="button" onClick={() => { const nextNumber = getNextTeamNumber(state.teams); setTeamDraft({ id: "", name: `Team${nextNumber}`, password: `team${nextNumber}`, enabled: true }); setTeamError(""); }}>取消</button>}
           </form>
           {teamError && <p className="error-text">{teamError}</p>}
-          {state.teams.map((team) => <div className="team-row" key={team.id}><input value={team.name} onChange={(event) => setState({ ...state, teams: state.teams.map((item) => item.id === team.id ? { ...item, name: event.target.value } : item) })} /><input value={team.password ?? ""} onChange={(event) => setState({ ...state, teams: state.teams.map((item) => item.id === team.id ? { ...item, password: event.target.value } : item) })} /><label className="inline-check"><input type="checkbox" checked={team.enabled} onChange={(event) => setState({ ...state, teams: state.teams.map((item) => item.id === team.id ? { ...item, enabled: event.target.checked } : item) })} />啟用</label><button onClick={() => setTeamDraft(team)}>修改</button><button onClick={() => deleteTeam(team.id)}>刪除</button></div>)}
+          {state.teams.map((team) => (
+            <div className="team-row" key={team.id}>
+              <input value={team.name} onChange={(event) => setState({ ...state, teams: state.teams.map((item) => item.id === team.id ? { ...item, name: event.target.value } : item) })} />
+              <input value={team.password ?? ""} onChange={(event) => setState({ ...state, teams: state.teams.map((item) => item.id === team.id ? { ...item, password: event.target.value } : item) })} />
+              <label className="inline-check"><input type="checkbox" checked={team.enabled} onChange={(event) => setState({ ...state, teams: state.teams.map((item) => item.id === team.id ? { ...item, enabled: event.target.checked } : item) })} />啟用</label>
+              <span className={team.loginLocked ? "lock-status locked" : "lock-status"}>{team.loginLocked ? "已登入鎖定" : "未登入"}</span>
+              <button onClick={() => setTeamDraft(team)}>修改</button>
+              <button onClick={() => unlockTeam(team.id)} disabled={!team.loginLocked}>解除登入鎖</button>
+              <button onClick={() => deleteTeam(team.id)}>刪除</button>
+            </div>
+          ))}
         </div>
         <div className="panel">
           <h2>教師帳號管理</h2>
