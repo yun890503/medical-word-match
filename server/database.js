@@ -17,7 +17,7 @@ export const defaultState = {
   teams: Array.from({ length: 7 }, (_, index) => ({
     id: `team-${index + 1}`,
     name: `Team${index + 1}`,
-    password: `team${index + 1}`,
+    password: "",
     enabled: true,
   })),
   teachers: [{ id: "teacher-admin", name: "系統管理教師", username: "admin", password: "admin123", enabled: true }],

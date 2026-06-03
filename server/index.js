@@ -108,8 +108,14 @@ function asyncRoute(handler) {
 
 app.post("/api/login", asyncRoute(async (request, response) => {
   const state = await readState(db);
-  const account = String(request.body.account || "").trim().toLowerCase();
+  const accountName = String(request.body.account || "").trim();
+  const account = accountName.toLowerCase();
   const password = String(request.body.password || "");
+  if (!accountName) {
+    response.status(400).json({ message: "Account name is required." });
+    return;
+  }
+
   const teacher = state.teachers.find((item) => item.enabled && item.username.toLowerCase() === account && item.password === password);
   if (teacher) {
     const session = createSession("teacher", teacher.id);
@@ -117,14 +123,27 @@ app.post("/api/login", asyncRoute(async (request, response) => {
     return;
   }
 
-  const team = state.teams.find((item) => item.enabled && item.name.toLowerCase() === account && item.password === password);
+  if (state.teachers.some((item) => item.username.toLowerCase() === account)) {
+    response.status(401).json({ message: "Invalid teacher password." });
+    return;
+  }
+
+  const team = state.teams.find((item) => item.name.toLowerCase() === account);
   if (team) {
+    if (!team.enabled) {
+      response.status(401).json({ message: "Team is disabled." });
+      return;
+    }
     const session = createSession("team", team.id);
     response.json({ session, state: sanitizeStateForRole(await getEffectiveState(), "team") });
     return;
   }
 
-  response.status(401).json({ message: "Invalid account or password." });
+  const nextTeam = { id: randomUUID(), name: accountName, password: "", enabled: true };
+  const nextState = await replaceState(db, { ...state, teams: [...state.teams, nextTeam] });
+  const session = createSession("team", nextTeam.id);
+  await broadcastState();
+  response.json({ session, state: sanitizeStateForRole(nextState, "team") });
 }));
 
 app.get("/api/state", asyncRoute(async (request, response) => {
