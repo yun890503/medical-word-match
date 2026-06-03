@@ -1,4 +1,4 @@
-import { ChangeEvent, DragEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, DragEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Download, FileDown, FileSpreadsheet, LogOut, Monitor, Pause, Play, Settings, Trophy, Users } from "lucide-react";
 import jsPDF from "jspdf";
 import * as XLSX from "xlsx";
@@ -400,11 +400,27 @@ function StudentView({ state, setState, team, remaining, elapsed, scoreboard }: 
   const rankIndex = scoreboard.findIndex((item) => item.id === team.id);
   const rank = rankIndex >= 0 ? rankIndex + 1 : null;
   const result = rankIndex >= 0 ? scoreboard[rankIndex] : null;
-  const [resultDismissed, setResultDismissed] = useState(false);
+  const [showResult, setShowResult] = useState(false);
+  const previousStatus = useRef(state.status);
+  const resultNoticeKey = `medical-result-notice:${team.id}:${state.startedAt ?? "manual"}`;
 
   useEffect(() => {
-    if (state.status !== "ended") setResultDismissed(false);
-  }, [state.status]);
+    const justEnded = previousStatus.current !== "ended" && state.status === "ended";
+    previousStatus.current = state.status;
+    if (state.status !== "ended") {
+      setShowResult(false);
+      return;
+    }
+    if (!justEnded || localStorage.getItem(resultNoticeKey)) return;
+    localStorage.setItem(resultNoticeKey, "shown");
+    setShowResult(true);
+  }, [resultNoticeKey, state.status]);
+
+  useEffect(() => {
+    if (!showResult) return;
+    const timer = window.setTimeout(() => setShowResult(false), 8000);
+    return () => window.clearTimeout(timer);
+  }, [showResult]);
 
   return (
     <main className="student-layout">
@@ -417,7 +433,7 @@ function StudentView({ state, setState, team, remaining, elapsed, scoreboard }: 
         <GameBoard state={state} setState={setState} team={team} elapsed={elapsed} disabled={state.status !== "running" || remaining <= 0} />
       </section>
       <LeaderboardPanel state={state} scoreboard={scoreboard} compact={false} />
-      {state.status === "ended" && !resultDismissed && rank && result && <TeamResultOverlay rank={rank} result={result} onClose={() => setResultDismissed(true)} />}
+      {showResult && rank && result && <TeamResultOverlay rank={rank} result={result} onClose={() => setShowResult(false)} />}
     </main>
   );
 }
