@@ -140,13 +140,24 @@ function getImportedCell(row: Record<string, unknown>, names: string[]) {
   return "";
 }
 
-function shuffle<T>(items: T[]) {
-  return [...items].sort(() => Math.random() - 0.5);
+function seededScore(value: string, seed: string) {
+  let hash = 2166136261;
+  const source = `${seed}:${value}`;
+  for (let index = 0; index < source.length; index += 1) {
+    hash ^= source.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
 }
 
-function buildOptions(correct: string, values: string[], max = 8) {
+function deterministicShuffle<T>(items: T[], seed: string, getValue: (item: T) => string) {
+  return [...items].sort((a, b) => seededScore(getValue(a), seed) - seededScore(getValue(b), seed));
+}
+
+function buildOptions(correct: string, values: string[], seed: string, max = 8) {
   const unique = Array.from(new Set(values.filter(Boolean))).filter((value) => normalize(value) !== normalize(correct));
-  return shuffle([correct, ...shuffle(unique).slice(0, max - 1)]);
+  const distractors = deterministicShuffle(unique, `${seed}:choices`, (value) => value).slice(0, max - 1);
+  return deterministicShuffle([correct, ...distractors], `${seed}:final`, (value) => value);
 }
 
 function composeWord(root: string, suffix: string, words: WordItem[]) {
@@ -392,8 +403,8 @@ function GameBoard({ state, setState, team, elapsed, disabled }: {
   const question = questions.find((item) => !answeredIds.includes(item.id)) ?? null;
   const [selectedRoot, setSelectedRoot] = useState("");
   const [lastResult, setLastResult] = useState<AnswerRecord | null>(null);
-  const rootOptions = useMemo(() => (question ? buildOptions(question.root, state.words.map((word) => word.root)) : []), [state.words, question?.id]);
-  const suffixOptions = useMemo(() => (question ? buildOptions(question.suffix, state.words.map((word) => word.suffix)) : []), [state.words, question?.id]);
+  const rootOptions = useMemo(() => (question ? buildOptions(question.root, state.words.map((word) => word.root), `${question.id}:root`) : []), [state.words, question?.id]);
+  const suffixOptions = useMemo(() => (question ? buildOptions(question.suffix, state.words.map((word) => word.suffix), `${question.id}:suffix`) : []), [state.words, question?.id]);
 
   useEffect(() => setSelectedRoot(""), [question?.id]);
 
