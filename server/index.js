@@ -64,7 +64,7 @@ async function getEffectiveState() {
   if (current.status !== "running" || !current.startedAt) return current;
   const elapsed = Math.floor((Date.now() - current.startedAt) / 1000) + (current.elapsedBeforePause || 0);
   if (elapsed < current.settings.durationSeconds) return current;
-  current = await replaceState(db, { ...current, status: "ended" });
+  current = await replaceState(db, { ...current, status: "ended", elapsedBeforePause: current.settings.durationSeconds });
   return current;
 }
 

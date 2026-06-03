@@ -171,7 +171,7 @@ function formatTime(seconds: number) {
 
 function getElapsed(state: AppState, now: number) {
   if (!state.startedAt) return 0;
-  if (state.status === "paused") return state.elapsedBeforePause;
+  if (state.status === "paused" || state.status === "ended") return state.elapsedBeforePause;
   return state.elapsedBeforePause + Math.floor((now - state.startedAt) / 1000);
 }
 
@@ -256,7 +256,7 @@ function App() {
   const remaining = Math.max(0, state.settings.durationSeconds - elapsed);
 
   useEffect(() => {
-    if (state.status === "running" && remaining <= 0) setState((current) => ({ ...current, status: "ended" }));
+    if (state.status === "running" && remaining <= 0) setState((current) => ({ ...current, status: "ended", elapsedBeforePause: current.settings.durationSeconds }));
   }, [remaining, state.status, setState]);
 
   useEffect(() => {
@@ -506,7 +506,7 @@ function AdminView({ state, setState, remaining, scoreboard, currentTeacherId }:
     setState((current) => ({ ...current, status: "paused", pausedAt: Date.now(), elapsedBeforePause: getElapsed(current, Date.now()) }));
   }
   function endMatch() {
-    setState((current) => ({ ...current, status: "ended" }));
+    setState((current) => ({ ...current, status: "ended", elapsedBeforePause: current.settings.durationSeconds }));
   }
   function saveTeam(event: FormEvent) {
     event.preventDefault();
