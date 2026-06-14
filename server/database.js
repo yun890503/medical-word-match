@@ -14,11 +14,12 @@ export const defaultState = {
     { id: "word-leukemia", word: "Leukemia", chinese: "白血病", root: "leuk", suffix: "emia" },
     { id: "word-arthritis", word: "Arthritis", chinese: "關節炎", root: "arthr", suffix: "itis" },
   ],
-  teams: Array.from({ length: 7 }, (_, index) => ({
+  teams: Array.from({ length: 12 }, (_, index) => ({
     id: `team-${index + 1}`,
     name: `Team${index + 1}`,
     password: `team${index + 1}`,
     enabled: true,
+    avatar: ["owl", "rocket", "star", "heart", "brain", "microscope", "pill", "dna", "trophy", "lightning", "leaf", "fire"][index],
   })),
   teachers: [{ id: "teacher-admin", name: "系統管理教師", username: "admin", password: "admin123", enabled: true }],
   settings: { questionCount: 10, durationSeconds: 300, showChinese: true, leaderboardMode: "live" },
@@ -45,7 +46,7 @@ function normalizeState(nextState = {}) {
     ...defaultState,
     ...nextState,
     words,
-    teams: nextState.teams?.length ? nextState.teams : defaultState.teams,
+    teams: nextState.teams?.length ? nextState.teams.map((team, index) => ({ ...team, avatar: team.avatar || defaultState.teams[index % defaultState.teams.length]?.avatar || "owl" })) : defaultState.teams,
     teachers: nextState.teachers?.length ? nextState.teachers : defaultState.teachers,
     settings: { ...defaultState.settings, ...nextState.settings },
     records: nextState.records ?? [],
@@ -87,6 +88,7 @@ async function initializeSchema(pool) {
       name VARCHAR(120) NOT NULL UNIQUE,
       password VARCHAR(255) NOT NULL,
       enabled TINYINT(1) NOT NULL DEFAULT 1,
+      avatar VARCHAR(40) NOT NULL DEFAULT 'owl',
       active_session_token VARCHAR(120) NULL,
       active_session_at BIGINT NULL,
       active_session_match_started_at BIGINT NULL,
@@ -99,6 +101,7 @@ async function initializeSchema(pool) {
     "ALTER TABLE teams ADD COLUMN active_session_token VARCHAR(120) NULL",
     "ALTER TABLE teams ADD COLUMN active_session_at BIGINT NULL",
     "ALTER TABLE teams ADD COLUMN active_session_match_started_at BIGINT NULL",
+    "ALTER TABLE teams ADD COLUMN avatar VARCHAR(40) NOT NULL DEFAULT 'owl'",
   ]) {
     try {
       await pool.query(statement);
@@ -181,7 +184,7 @@ export async function readState(pool) {
     pool.query("SELECT * FROM settings WHERE id = 1"),
     pool.query("SELECT * FROM match_state WHERE id = 1"),
     pool.query(`
-      SELECT id, name, password, enabled,
+      SELECT id, name, password, enabled, avatar,
         active_session_token AS activeSessionToken,
         active_session_at AS activeSessionAt,
         active_session_match_started_at AS activeSessionMatchStartedAt,
@@ -242,13 +245,14 @@ export async function replaceState(pool, incomingState) {
       const activeSession = activeSessions.get(team.id) || {};
       await connection.query(
         `INSERT INTO teams
-          (id, name, password, enabled, active_session_token, active_session_at, active_session_match_started_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          (id, name, password, enabled, avatar, active_session_token, active_session_at, active_session_match_started_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           team.id || randomUUID(),
           team.name,
           team.password || "",
           boolToInt(team.enabled),
+          team.avatar || "owl",
           team.activeSessionToken ?? activeSession.activeSessionToken ?? null,
           team.activeSessionAt ?? activeSession.activeSessionAt ?? null,
           team.activeSessionMatchStartedAt ?? activeSession.activeSessionMatchStartedAt ?? null,

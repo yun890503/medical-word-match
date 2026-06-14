@@ -5,7 +5,7 @@ import * as XLSX from "xlsx";
 import { io } from "socket.io-client";
 
 type WordItem = { id: string; word: string; chinese: string; root: string; suffix: string };
-type Team = { id: string; name: string; password?: string; enabled: boolean; loginLocked?: boolean; activeSessionAt?: number | null; activeSessionMatchStartedAt?: number | null };
+type Team = { id: string; name: string; password?: string; enabled: boolean; avatar?: string; loginLocked?: boolean; activeSessionAt?: number | null; activeSessionMatchStartedAt?: number | null };
 type Teacher = { id: string; name: string; username: string; password?: string; enabled: boolean };
 type Session = { role: "team" | "teacher"; id: string; token: string };
 type MatchStatus = "waiting" | "running" | "paused" | "ended";
@@ -57,6 +57,29 @@ const API_ORIGIN = getApiOrigin();
 const API_STATE_URL = `${API_ORIGIN}/api/state`;
 const API_LOGIN_URL = `${API_ORIGIN}/api/login`;
 
+const avatarOptions = [
+  { id: "owl", icon: "🦉", label: "貓頭鷹", color: "#7c4dff" },
+  { id: "rocket", icon: "🚀", label: "火箭", color: "#1967d2" },
+  { id: "star", icon: "⭐", label: "星星", color: "#f9ab00" },
+  { id: "heart", icon: "💖", label: "愛心", color: "#d93025" },
+  { id: "brain", icon: "🧠", label: "大腦", color: "#9334e6" },
+  { id: "microscope", icon: "🔬", label: "顯微鏡", color: "#00897b" },
+  { id: "pill", icon: "💊", label: "膠囊", color: "#e8710a" },
+  { id: "dna", icon: "🧬", label: "DNA", color: "#0097a7" },
+  { id: "trophy", icon: "🏆", label: "獎盃", color: "#b06000" },
+  { id: "lightning", icon: "⚡", label: "閃電", color: "#fbbc04" },
+  { id: "leaf", icon: "🍀", label: "幸運草", color: "#188038" },
+  { id: "fire", icon: "🔥", label: "火焰", color: "#c5221f" },
+] as const;
+
+function getDefaultAvatar(index: number) {
+  return avatarOptions[index % avatarOptions.length].id;
+}
+
+function getAvatar(avatarId?: string) {
+  return avatarOptions.find((avatar) => avatar.id === avatarId) ?? avatarOptions[0];
+}
+
 const defaultWords: WordItem[] = [
   { id: "word-neurology", word: "Neurology", chinese: "神經學", root: "neur", suffix: "ology" },
   { id: "word-cardiology", word: "Cardiology", chinese: "心臟學", root: "cardi", suffix: "ology" },
@@ -72,11 +95,12 @@ const defaultWords: WordItem[] = [
 
 const defaultState: AppState = {
   words: defaultWords,
-  teams: Array.from({ length: 7 }, (_, index) => ({
+  teams: Array.from({ length: 12 }, (_, index) => ({
     id: `team-${index + 1}`,
     name: `Team${index + 1}`,
     password: `team${index + 1}`,
     enabled: true,
+    avatar: getDefaultAvatar(index),
   })),
   teachers: [{ id: "teacher-admin", name: "系統管理教師", username: "admin", password: "admin123", enabled: true }],
   settings: { questionCount: 10, durationSeconds: 300, showChinese: true, leaderboardMode: "live" },
@@ -100,7 +124,7 @@ function normalizeState(partial: Partial<AppState>): AppState {
     ...defaultState,
     ...partial,
     words: partial.words?.length ? partial.words : defaultState.words,
-    teams: partial.teams?.length ? partial.teams : defaultState.teams,
+    teams: partial.teams?.length ? partial.teams.map((team, index) => ({ ...team, avatar: team.avatar || getDefaultAvatar(index) })) : defaultState.teams,
     teachers: partial.teachers ?? [],
     settings: { ...defaultState.settings, ...partial.settings },
     records: partial.records ?? [],
@@ -447,7 +471,6 @@ function StudentView({ state, setState, team, remaining, elapsed, scoreboard }: 
   const [showResult, setShowResult] = useState(false);
   const previousStatus = useRef(state.status);
   const resultNoticeKey = `medical-result-notice:${team.id}:${state.startedAt ?? "manual"}`;
-
   useEffect(() => {
     const justEnded = previousStatus.current !== "ended" && state.status === "ended";
     previousStatus.current = state.status;
@@ -470,7 +493,7 @@ function StudentView({ state, setState, team, remaining, elapsed, scoreboard }: 
     <main className="student-layout">
       <section className="game-panel">
         <div className="status-bar">
-          <strong>{team.name}</strong>
+          <strong className="team-title"><TeamAvatar team={team} />{team.name}</strong>
           <span>剩餘時間 {formatTime(remaining)}</span>
           <span>目前得分 {score}</span>
         </div>
@@ -493,12 +516,28 @@ function TeamResultOverlay({ rank, result, onClose }: {
       <div className="result-card" onClick={(event) => event.stopPropagation()}>
         {medal ? <div className={`medal ${medal.className}`}>{medal.label}</div> : <div className="medal standard">完成</div>}
         <p className="eyebrow">比賽結果</p>
-        <h2>{result.name} 第 {rank} 名</h2>
+        <h2><TeamAvatar team={result} />{result.name} 第 {rank} 名</h2>
         <p className="result-score">得分 {result.score} 分</p>
         <p className="hint">完成時間：{result.finishTime === Number.MAX_SAFE_INTEGER ? "-" : formatTime(result.finishTime)}</p>
         <button type="button" onClick={onClose}>關閉</button>
       </div>
     </div>
+  );
+}
+
+function TeamAvatar({ team, size = "md" }: { team: Pick<Team, "avatar" | "name">; size?: "sm" | "md" | "lg" }) {
+  const avatar = getAvatar(team.avatar);
+  return <span className={`team-avatar ${size}`} style={{ backgroundColor: avatar.color }} title={`${team.name}：${avatar.label}`} aria-label={avatar.label}>{avatar.icon}</span>;
+}
+
+function AvatarSelect({ value, onChange, compact = false }: { value: string; onChange: (avatar: string) => void; compact?: boolean }) {
+  return (
+    <label className={compact ? "avatar-picker compact" : "avatar-picker"}>
+      {!compact && <span>頭像</span>}
+      <select value={value} onChange={(event) => onChange(event.target.value)}>
+        {avatarOptions.map((avatar) => <option key={avatar.id} value={avatar.id}>{avatar.icon} {avatar.label}</option>)}
+      </select>
+    </label>
   );
 }
 
@@ -596,7 +635,7 @@ function LeaderboardPanel({ state, scoreboard, compact }: { state: AppState; sco
           <thead><tr><th>排名</th><th>隊伍</th><th>分數</th><th>完成時間</th></tr></thead>
           <tbody>{scoreboard.map((team, index) => {
             const rankStyle = getRankStyle(index);
-            return <tr key={team.id} className={rankStyle.className}><td><span className="rank-icon">{rankStyle.icon}</span><strong>{index + 1}</strong></td><td>{team.name}</td><td>{team.score}</td><td>{team.finishTime === Number.MAX_SAFE_INTEGER ? "-" : formatTime(team.finishTime)}</td></tr>;
+            return <tr key={team.id} className={rankStyle.className}><td><span className="rank-icon">{rankStyle.icon}</span><strong>{index + 1}</strong></td><td><span className="leaderboard-team"><TeamAvatar team={team} size="sm" />{team.name}</span></td><td>{team.score}</td><td>{team.finishTime === Number.MAX_SAFE_INTEGER ? "-" : formatTime(team.finishTime)}</td></tr>;
           })}</tbody>
         </table>
       )}
@@ -614,9 +653,9 @@ function AdminView({ state, setState, remaining, scoreboard, currentTeacherId, a
 }) {
   const nextTeamNumber = getNextTeamNumber(state.teams);
   const [wordDraft, setWordDraft] = useState<WordItem>({ id: "", chinese: "", word: "", root: "", suffix: "" });
-  const [teamDraft, setTeamDraft] = useState<Team>({ id: "", name: `Team${nextTeamNumber}`, password: `team${nextTeamNumber}`, enabled: true });
+  const [teamDraft, setTeamDraft] = useState<Team>({ id: "", name: `Team${nextTeamNumber}`, password: `team${nextTeamNumber}`, enabled: true, avatar: getDefaultAvatar(nextTeamNumber - 1) });
   const [teacherDraft, setTeacherDraft] = useState<Teacher>({ id: "", name: "", username: "", password: "", enabled: true });
-  const [teamEdits, setTeamEdits] = useState<Record<string, Pick<Team, "name" | "password" | "enabled">>>({});
+  const [teamEdits, setTeamEdits] = useState<Record<string, Pick<Team, "name" | "password" | "enabled" | "avatar">>>({});
   const [teacherError, setTeacherError] = useState("");
   const [teamError, setTeamError] = useState("");
   const [teamMessage, setTeamMessage] = useState("");
@@ -649,14 +688,14 @@ function AdminView({ state, setState, remaining, scoreboard, currentTeacherId, a
     const next = { ...teamDraft, id: teamDraft.id || crypto.randomUUID(), name, password };
     setState((current) => ({ ...current, teams: teamDraft.id ? current.teams.map((team) => team.id === teamDraft.id ? next : team) : [...current.teams, next] }));
     const nextNumber = getNextTeamNumber([...state.teams, next]);
-    setTeamDraft({ id: "", name: `Team${nextNumber}`, password: `team${nextNumber}`, enabled: true });
+    setTeamDraft({ id: "", name: `Team${nextNumber}`, password: `team${nextNumber}`, enabled: true, avatar: getDefaultAvatar(nextNumber - 1) });
     setTeamError("");
     setTeamMessage(teamDraft.id ? "隊伍資料已儲存。" : "已新增隊伍。");
   }
   function getTeamEdit(team: Team) {
-    return teamEdits[team.id] ?? { name: team.name, password: team.password ?? "", enabled: team.enabled };
+    return teamEdits[team.id] ?? { name: team.name, password: team.password ?? "", enabled: team.enabled, avatar: team.avatar || getDefaultAvatar(0) };
   }
-  function updateTeamEdit(team: Team, patch: Partial<Pick<Team, "name" | "password" | "enabled">>) {
+  function updateTeamEdit(team: Team, patch: Partial<Pick<Team, "name" | "password" | "enabled" | "avatar">>) {
     const current = getTeamEdit(team);
     setTeamEdits((drafts) => ({ ...drafts, [team.id]: { ...current, ...patch } }));
     setTeamError("");
@@ -677,7 +716,7 @@ function AdminView({ state, setState, remaining, scoreboard, currentTeacherId, a
       setTeamMessage("");
       return;
     }
-    const next = { ...team, name, password, enabled: draft.enabled };
+    const next = { ...team, name, password, enabled: draft.enabled, avatar: draft.avatar || team.avatar || getDefaultAvatar(0) };
     setState((current) => ({ ...current, teams: current.teams.map((item) => item.id === team.id ? next : item) }));
     setTeamEdits((drafts) => {
       const { [team.id]: _saved, ...rest } = drafts;
@@ -862,19 +901,21 @@ function AdminView({ state, setState, remaining, scoreboard, currentTeacherId, a
           <form className="team-form" onSubmit={saveTeam}>
             <input placeholder="隊伍名稱" value={teamDraft.name} onChange={(event) => setTeamDraft({ ...teamDraft, name: event.target.value })} required />
             <input placeholder="密碼" value={teamDraft.password ?? ""} onChange={(event) => setTeamDraft({ ...teamDraft, password: event.target.value })} required />
+            <AvatarSelect value={teamDraft.avatar || getDefaultAvatar(nextTeamNumber - 1)} onChange={(avatar) => setTeamDraft({ ...teamDraft, avatar })} />
             <label className="inline-check"><input type="checkbox" checked={teamDraft.enabled} onChange={(event) => setTeamDraft({ ...teamDraft, enabled: event.target.checked })} />啟用</label>
             <button className="primary" type="submit">{teamDraft.id ? "儲存隊伍" : "新增隊伍"}</button>
-            {teamDraft.id && <button type="button" onClick={() => { const nextNumber = getNextTeamNumber(state.teams); setTeamDraft({ id: "", name: `Team${nextNumber}`, password: `team${nextNumber}`, enabled: true }); setTeamError(""); }}>取消</button>}
+            {teamDraft.id && <button type="button" onClick={() => { const nextNumber = getNextTeamNumber(state.teams); setTeamDraft({ id: "", name: `Team${nextNumber}`, password: `team${nextNumber}`, enabled: true, avatar: getDefaultAvatar(nextNumber - 1) }); setTeamError(""); }}>取消</button>}
           </form>
           {teamError && <p className="error-text">{teamError}</p>}
           {teamMessage && <p className="hint">{teamMessage}</p>}
           {state.teams.map((team) => {
             const draft = getTeamEdit(team);
-            const changed = draft.name !== team.name || (draft.password ?? "") !== (team.password ?? "") || draft.enabled !== team.enabled;
+            const changed = draft.name !== team.name || (draft.password ?? "") !== (team.password ?? "") || draft.enabled !== team.enabled || draft.avatar !== team.avatar;
             return (
               <div className="team-row" key={team.id}>
                 <input value={draft.name} onChange={(event) => updateTeamEdit(team, { name: event.target.value })} />
                 <input value={draft.password ?? ""} onChange={(event) => updateTeamEdit(team, { password: event.target.value })} />
+                <AvatarSelect value={draft.avatar || getDefaultAvatar(0)} onChange={(avatar) => updateTeamEdit(team, { avatar })} compact />
                 <label className="inline-check"><input type="checkbox" checked={draft.enabled} onChange={(event) => updateTeamEdit(team, { enabled: event.target.checked })} />啟用</label>
                 <span className={team.loginLocked ? "lock-status locked" : "lock-status"}>{team.loginLocked ? "已登入鎖定" : "未登入"}</span>
                 <button className={changed ? "primary" : ""} onClick={() => saveTeamRow(team)} disabled={!changed}>儲存</button>

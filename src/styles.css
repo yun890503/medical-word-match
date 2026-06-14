@@ -516,6 +516,43 @@ select {
   padding: 14px 18px;
 }
 
+.team-title,
+.leaderboard-team,
+.result-card h2 {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+}
+
+.team-avatar {
+  align-items: center;
+  border: 2px solid rgba(255, 255, 255, 0.82);
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(24, 33, 47, 0.18);
+  color: #ffffff;
+  display: inline-flex;
+  flex: 0 0 auto;
+  justify-content: center;
+}
+
+.team-avatar.sm {
+  font-size: 15px;
+  height: 28px;
+  width: 28px;
+}
+
+.team-avatar.md {
+  font-size: 20px;
+  height: 38px;
+  width: 38px;
+}
+
+.team-avatar.lg {
+  font-size: 28px;
+  height: 54px;
+  width: 54px;
+}
+
 .icon-button {
   min-height: 34px;
   padding: 6px 9px;
@@ -704,6 +741,10 @@ select {
   font-weight: 700;
 }
 
+.leaderboard-team {
+  min-width: 0;
+}
+
 .leaderboard-table tbody td:first-child {
   border-radius: 8px 0 0 8px;
 }
@@ -808,12 +849,24 @@ th {
 
 .team-row {
   align-items: center;
-  grid-template-columns: 1fr 1fr auto auto auto auto auto;
+  grid-template-columns: 1fr 1fr minmax(126px, auto) auto auto auto auto auto;
 }
 
 .team-form {
   align-items: center;
-  grid-template-columns: 1fr 1fr auto auto auto;
+  grid-template-columns: 1fr 1fr minmax(150px, auto) auto auto;
+}
+
+.avatar-picker {
+  gap: 4px;
+}
+
+.avatar-picker select {
+  min-width: 126px;
+}
+
+.avatar-picker.compact {
+  min-width: 126px;
 }
 
 .inline-check {
