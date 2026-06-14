@@ -166,8 +166,9 @@ app.post("/api/login", asyncRoute(async (request, response) => {
     }
     const session = createSession("team", team.id);
     await setTeamSession(db, team.id, session.token, state.startedAt);
-    await broadcastState();
-    response.json({ session, state: sanitizeStateForRole(await getEffectiveState(), "team") });
+    const nextState = await getEffectiveState();
+    response.json({ session, state: sanitizeStateForRole(nextState, "team") });
+    broadcastState().catch((error) => console.error(error));
     return;
   }
 
