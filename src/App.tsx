@@ -80,6 +80,42 @@ function getAvatar(avatarId?: string) {
   return avatarOptions.find((avatar) => avatar.id === avatarId) ?? avatarOptions[0];
 }
 
+function isImageAvatar(avatar?: string) {
+  return Boolean(avatar?.startsWith("data:image/"));
+}
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("File read failed."));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function resizeAvatarFile(file: File) {
+  if (!file.type.startsWith("image/")) throw new Error("請選擇圖片檔。");
+  if (file.type === "image/svg+xml") return readFileAsDataUrl(file);
+  const source = await readFileAsDataUrl(file);
+  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const nextImage = new Image();
+    nextImage.onload = () => resolve(nextImage);
+    nextImage.onerror = () => reject(new Error("圖片讀取失敗。"));
+    nextImage.src = source;
+  });
+  const size = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("圖片處理失敗。");
+  const sourceSize = Math.min(image.naturalWidth, image.naturalHeight);
+  const sx = (image.naturalWidth - sourceSize) / 2;
+  const sy = (image.naturalHeight - sourceSize) / 2;
+  context.drawImage(image, sx, sy, sourceSize, sourceSize, 0, 0, size, size);
+  return canvas.toDataURL("image/jpeg", 0.82);
+}
+
 const defaultWords: WordItem[] = [
   { id: "word-neurology", word: "Neurology", chinese: "神經學", root: "neur", suffix: "ology" },
   { id: "word-cardiology", word: "Cardiology", chinese: "心臟學", root: "cardi", suffix: "ology" },
@@ -527,17 +563,31 @@ function TeamResultOverlay({ rank, result, onClose }: {
 
 function TeamAvatar({ team, size = "md" }: { team: Pick<Team, "avatar" | "name">; size?: "sm" | "md" | "lg" }) {
   const avatar = getAvatar(team.avatar);
+  if (isImageAvatar(team.avatar)) {
+    return <span className={`team-avatar ${size} image`} title={`${team.name}：自訂頭像`} aria-label="自訂頭像"><img src={team.avatar} alt="" /></span>;
+  }
   return <span className={`team-avatar ${size}`} style={{ backgroundColor: avatar.color }} title={`${team.name}：${avatar.label}`} aria-label={avatar.label}>{avatar.icon}</span>;
 }
 
-function AvatarSelect({ value, onChange, compact = false }: { value: string; onChange: (avatar: string) => void; compact?: boolean }) {
+function AvatarUpload({ value, onChange, onError, compact = false }: { value: string; onChange: (avatar: string) => void; onError: (message: string) => void; compact?: boolean }) {
+  const previewTeam = { name: "隊伍頭像", avatar: value };
+  async function upload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      onChange(await resizeAvatarFile(file));
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "頭像上傳失敗。");
+    } finally {
+      event.target.value = "";
+    }
+  }
   return (
-    <label className={compact ? "avatar-picker compact" : "avatar-picker"}>
-      {!compact && <span>頭像</span>}
-      <select value={value} onChange={(event) => onChange(event.target.value)}>
-        {avatarOptions.map((avatar) => <option key={avatar.id} value={avatar.id}>{avatar.icon} {avatar.label}</option>)}
-      </select>
-    </label>
+    <div className={compact ? "avatar-uploader compact" : "avatar-uploader"}>
+      <TeamAvatar team={previewTeam} size={compact ? "sm" : "md"} />
+      <label className="file-button avatar-file">上傳圖片<input type="file" accept="image/*" onChange={upload} /></label>
+      {isImageAvatar(value) && <button type="button" onClick={() => onChange(getDefaultAvatar(0))}>恢復預設</button>}
+    </div>
   );
 }
 
@@ -901,7 +951,7 @@ function AdminView({ state, setState, remaining, scoreboard, currentTeacherId, a
           <form className="team-form" onSubmit={saveTeam}>
             <input placeholder="隊伍名稱" value={teamDraft.name} onChange={(event) => setTeamDraft({ ...teamDraft, name: event.target.value })} required />
             <input placeholder="密碼" value={teamDraft.password ?? ""} onChange={(event) => setTeamDraft({ ...teamDraft, password: event.target.value })} required />
-            <AvatarSelect value={teamDraft.avatar || getDefaultAvatar(nextTeamNumber - 1)} onChange={(avatar) => setTeamDraft({ ...teamDraft, avatar })} />
+            <AvatarUpload value={teamDraft.avatar || getDefaultAvatar(nextTeamNumber - 1)} onChange={(avatar) => setTeamDraft({ ...teamDraft, avatar })} onError={setTeamError} />
             <label className="inline-check"><input type="checkbox" checked={teamDraft.enabled} onChange={(event) => setTeamDraft({ ...teamDraft, enabled: event.target.checked })} />啟用</label>
             <button className="primary" type="submit">{teamDraft.id ? "儲存隊伍" : "新增隊伍"}</button>
             {teamDraft.id && <button type="button" onClick={() => { const nextNumber = getNextTeamNumber(state.teams); setTeamDraft({ id: "", name: `Team${nextNumber}`, password: `team${nextNumber}`, enabled: true, avatar: getDefaultAvatar(nextNumber - 1) }); setTeamError(""); }}>取消</button>}
@@ -915,7 +965,7 @@ function AdminView({ state, setState, remaining, scoreboard, currentTeacherId, a
               <div className="team-row" key={team.id}>
                 <input value={draft.name} onChange={(event) => updateTeamEdit(team, { name: event.target.value })} />
                 <input value={draft.password ?? ""} onChange={(event) => updateTeamEdit(team, { password: event.target.value })} />
-                <AvatarSelect value={draft.avatar || getDefaultAvatar(0)} onChange={(avatar) => updateTeamEdit(team, { avatar })} compact />
+                <AvatarUpload value={draft.avatar || getDefaultAvatar(0)} onChange={(avatar) => updateTeamEdit(team, { avatar })} onError={setTeamError} compact />
                 <label className="inline-check"><input type="checkbox" checked={draft.enabled} onChange={(event) => updateTeamEdit(team, { enabled: event.target.checked })} />啟用</label>
                 <span className={team.loginLocked ? "lock-status locked" : "lock-status"}>{team.loginLocked ? "已登入鎖定" : "未登入"}</span>
                 <button className={changed ? "primary" : ""} onClick={() => saveTeamRow(team)} disabled={!changed}>儲存</button>

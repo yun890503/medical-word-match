@@ -88,7 +88,7 @@ async function initializeSchema(pool) {
       name VARCHAR(120) NOT NULL UNIQUE,
       password VARCHAR(255) NOT NULL,
       enabled TINYINT(1) NOT NULL DEFAULT 1,
-      avatar VARCHAR(40) NOT NULL DEFAULT 'owl',
+      avatar MEDIUMTEXT NULL,
       active_session_token VARCHAR(120) NULL,
       active_session_at BIGINT NULL,
       active_session_match_started_at BIGINT NULL,
@@ -101,7 +101,8 @@ async function initializeSchema(pool) {
     "ALTER TABLE teams ADD COLUMN active_session_token VARCHAR(120) NULL",
     "ALTER TABLE teams ADD COLUMN active_session_at BIGINT NULL",
     "ALTER TABLE teams ADD COLUMN active_session_match_started_at BIGINT NULL",
-    "ALTER TABLE teams ADD COLUMN avatar VARCHAR(40) NOT NULL DEFAULT 'owl'",
+    "ALTER TABLE teams ADD COLUMN avatar MEDIUMTEXT NULL",
+    "ALTER TABLE teams MODIFY COLUMN avatar MEDIUMTEXT NULL",
   ]) {
     try {
       await pool.query(statement);
