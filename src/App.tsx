@@ -425,7 +425,7 @@ function LoginPanel({ onLogin, notice }: { onLogin: (session: Session, state: Ap
           {notice && <p className="hint">{notice}</p>}
           {error && <p className="error-text">{error}</p>}
           <button type="submit" className="primary" disabled={busy}>{busy ? "登入中" : "登入"}</button>
-          <p className="hint">教師：admin/admin123；隊伍由教師後台建立與管理。</p>
+          <p className="hint">123；隊伍由教師後台建立與管理。</p>
         </form>
       </section>
     </main>
