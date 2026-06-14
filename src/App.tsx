@@ -1,5 +1,5 @@
 import { ChangeEvent, DragEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Download, FileDown, FileSpreadsheet, LogOut, Monitor, Pause, Play, Settings, Trophy, Users } from "lucide-react";
+import { Download, FileDown, FileSpreadsheet, LogOut, Monitor, Pause, Pencil, Play, Plus, Settings, Trash2, Trophy, Users } from "lucide-react";
 import jsPDF from "jspdf";
 import * as XLSX from "xlsx";
 import { io } from "socket.io-client";
@@ -705,7 +705,7 @@ function AdminView({ state, setState, remaining, scoreboard, currentTeacherId, a
   const [wordDraft, setWordDraft] = useState<WordItem>({ id: "", chinese: "", word: "", root: "", suffix: "" });
   const [teamDraft, setTeamDraft] = useState<Team>({ id: "", name: `Team${nextTeamNumber}`, password: `team${nextTeamNumber}`, enabled: true, avatar: getDefaultAvatar(nextTeamNumber - 1) });
   const [teacherDraft, setTeacherDraft] = useState<Teacher>({ id: "", name: "", username: "", password: "", enabled: true });
-  const [teamEdits, setTeamEdits] = useState<Record<string, Pick<Team, "name" | "password" | "enabled" | "avatar">>>({});
+  const [teamModalOpen, setTeamModalOpen] = useState(false);
   const [teacherError, setTeacherError] = useState("");
   const [teamError, setTeamError] = useState("");
   const [teamMessage, setTeamMessage] = useState("");
@@ -720,6 +720,27 @@ function AdminView({ state, setState, remaining, scoreboard, currentTeacherId, a
   }
   function endMatch() {
     setState((current) => ({ ...current, status: "ended", elapsedBeforePause: current.settings.durationSeconds }));
+  }
+  function getBlankTeamDraft(teams = state.teams) {
+    const number = getNextTeamNumber(teams);
+    return { id: "", name: `Team${number}`, password: `team${number}`, enabled: true, avatar: getDefaultAvatar(number - 1) };
+  }
+  function openNewTeamModal() {
+    setTeamDraft(getBlankTeamDraft());
+    setTeamError("");
+    setTeamMessage("");
+    setTeamModalOpen(true);
+  }
+  function openEditTeamModal(team: Team) {
+    setTeamDraft({ ...team, password: team.password ?? "", avatar: team.avatar || getDefaultAvatar(0) });
+    setTeamError("");
+    setTeamMessage("");
+    setTeamModalOpen(true);
+  }
+  function closeTeamModal() {
+    setTeamModalOpen(false);
+    setTeamDraft(getBlankTeamDraft());
+    setTeamError("");
   }
   function saveTeam(event: FormEvent) {
     event.preventDefault();
@@ -741,45 +762,9 @@ function AdminView({ state, setState, remaining, scoreboard, currentTeacherId, a
     setTeamDraft({ id: "", name: `Team${nextNumber}`, password: `team${nextNumber}`, enabled: true, avatar: getDefaultAvatar(nextNumber - 1) });
     setTeamError("");
     setTeamMessage(teamDraft.id ? "隊伍資料已儲存。" : "已新增隊伍。");
-  }
-  function getTeamEdit(team: Team) {
-    return teamEdits[team.id] ?? { name: team.name, password: team.password ?? "", enabled: team.enabled, avatar: team.avatar || getDefaultAvatar(0) };
-  }
-  function updateTeamEdit(team: Team, patch: Partial<Pick<Team, "name" | "password" | "enabled" | "avatar">>) {
-    const current = getTeamEdit(team);
-    setTeamEdits((drafts) => ({ ...drafts, [team.id]: { ...current, ...patch } }));
-    setTeamError("");
-    setTeamMessage("");
-  }
-  function saveTeamRow(team: Team) {
-    const draft = getTeamEdit(team);
-    const name = draft.name.trim();
-    const password = (draft.password ?? "").trim();
-    if (!name || !password) {
-      setTeamError("請輸入隊伍名稱與密碼。");
-      setTeamMessage("");
-      return;
-    }
-    const duplicate = state.teams.some((item) => item.id !== team.id && normalize(item.name) === normalize(name));
-    if (duplicate) {
-      setTeamError("隊伍名稱已存在。");
-      setTeamMessage("");
-      return;
-    }
-    const next = { ...team, name, password, enabled: draft.enabled, avatar: draft.avatar || team.avatar || getDefaultAvatar(0) };
-    setState((current) => ({ ...current, teams: current.teams.map((item) => item.id === team.id ? next : item) }));
-    setTeamEdits((drafts) => {
-      const { [team.id]: _saved, ...rest } = drafts;
-      return rest;
-    });
-    setTeamError("");
-    setTeamMessage(`${name} 已儲存到資料庫。`);
+    setTeamModalOpen(false);
   }
   function deleteTeam(teamId: string) {
-    setTeamEdits((drafts) => {
-      const { [teamId]: _deleted, ...rest } = drafts;
-      return rest;
-    });
     setState((current) => ({
       ...current,
       teams: current.teams.filter((team) => team.id !== teamId),
@@ -946,34 +931,50 @@ function AdminView({ state, setState, remaining, scoreboard, currentTeacherId, a
             </table>
           </div>
         </div>
-        <div className="panel">
-          <h2>隊伍管理</h2>
-          <form className="team-form" onSubmit={saveTeam}>
-            <input placeholder="隊伍名稱" value={teamDraft.name} onChange={(event) => setTeamDraft({ ...teamDraft, name: event.target.value })} required />
-            <input placeholder="密碼" value={teamDraft.password ?? ""} onChange={(event) => setTeamDraft({ ...teamDraft, password: event.target.value })} required />
-            <AvatarUpload value={teamDraft.avatar || getDefaultAvatar(nextTeamNumber - 1)} onChange={(avatar) => setTeamDraft({ ...teamDraft, avatar })} onError={setTeamError} />
-            <label className="inline-check"><input type="checkbox" checked={teamDraft.enabled} onChange={(event) => setTeamDraft({ ...teamDraft, enabled: event.target.checked })} />啟用</label>
-            <button className="primary" type="submit">{teamDraft.id ? "儲存隊伍" : "新增隊伍"}</button>
-            {teamDraft.id && <button type="button" onClick={() => { const nextNumber = getNextTeamNumber(state.teams); setTeamDraft({ id: "", name: `Team${nextNumber}`, password: `team${nextNumber}`, enabled: true, avatar: getDefaultAvatar(nextNumber - 1) }); setTeamError(""); }}>取消</button>}
-          </form>
+        <div className="panel team-management-panel">
+          <div className="panel-heading">
+            <div>
+              <h2>隊伍管理</h2>
+              <p className="hint">管理參賽隊伍與頭像設定</p>
+            </div>
+            <button className="primary" type="button" onClick={openNewTeamModal}><Plus size={18} /> 新增隊伍</button>
+          </div>
           {teamError && <p className="error-text">{teamError}</p>}
           {teamMessage && <p className="hint">{teamMessage}</p>}
-          {state.teams.map((team) => {
-            const draft = getTeamEdit(team);
-            const changed = draft.name !== team.name || (draft.password ?? "") !== (team.password ?? "") || draft.enabled !== team.enabled || draft.avatar !== team.avatar;
-            return (
-              <div className="team-row" key={team.id}>
-                <input value={draft.name} onChange={(event) => updateTeamEdit(team, { name: event.target.value })} />
-                <input value={draft.password ?? ""} onChange={(event) => updateTeamEdit(team, { password: event.target.value })} />
-                <AvatarUpload value={draft.avatar || getDefaultAvatar(0)} onChange={(avatar) => updateTeamEdit(team, { avatar })} onError={setTeamError} compact />
-                <label className="inline-check"><input type="checkbox" checked={draft.enabled} onChange={(event) => updateTeamEdit(team, { enabled: event.target.checked })} />啟用</label>
+          <div className="team-list-header">現有隊伍（{state.teams.length} 隊）</div>
+          <div className="team-card-list">
+            {state.teams.map((team) => (
+              <div className="team-card-row" key={team.id}>
+                <span className="team-drag-handle">⋮⋮</span>
+                <div className="team-card-main">
+                  <TeamAvatar team={team} />
+                  <div>
+                    <strong>{team.name}</strong>
+                    <span>{team.password || "未設定密碼"}</span>
+                  </div>
+                </div>
+                <div className="team-avatar-summary">
+                  <TeamAvatar team={team} size="sm" />
+                  <div>
+                    <span>頭像</span>
+                    <strong>{isImageAvatar(team.avatar) ? "自訂圖片" : getAvatar(team.avatar).label}</strong>
+                  </div>
+                </div>
                 <span className={team.loginLocked ? "lock-status locked" : "lock-status"}>{team.loginLocked ? "已登入鎖定" : "未登入"}</span>
-                <button className={changed ? "primary" : ""} onClick={() => saveTeamRow(team)} disabled={!changed}>儲存</button>
-                <button onClick={() => unlockTeam(team.id)} disabled={!team.loginLocked}>解除登入鎖</button>
-                <button onClick={() => deleteTeam(team.id)}>刪除</button>
+                <label className="inline-check"><input type="checkbox" checked={team.enabled} onChange={(event) => setState({ ...state, teams: state.teams.map((item) => item.id === team.id ? { ...item, enabled: event.target.checked } : item) })} />啟用</label>
+                <div className="team-card-actions">
+                  <button type="button" onClick={() => openEditTeamModal(team)}><Pencil size={16} /> 編輯</button>
+                  <button type="button" onClick={() => unlockTeam(team.id)} disabled={!team.loginLocked}>解除登入鎖</button>
+                  <button type="button" className="danger" onClick={() => deleteTeam(team.id)}><Trash2 size={16} /> 刪除</button>
+                </div>
               </div>
-            );
-          })}
+            ))}
+          </div>
+          <div className="team-list-footnote">拖曳排序預留區：目前依建立順序顯示。</div>
+          <div className="team-legend">
+            <span><b className="dot green"></b>已登入鎖定：隊伍正在登入中</span>
+            <span><b className="dot blue"></b>啟用：可在登入頁使用</span>
+          </div>
         </div>
         <div className="panel">
           <h2>教師帳號管理</h2>
@@ -995,6 +996,31 @@ function AdminView({ state, setState, remaining, scoreboard, currentTeacherId, a
           {state.records.length === 0 ? <p className="hint">目前尚無作答紀錄。</p> : <div className="table-scroll"><table><thead><tr><th>時間</th><th>隊伍</th><th>題目</th><th>選擇內容</th><th>組合結果</th><th>判定</th><th>作答秒數</th></tr></thead><tbody>{[...state.records].reverse().map((record) => <tr key={record.id}><td>{record.answeredAt}</td><td>{record.teamName}</td><td>{record.chinese}</td><td>{record.selectedRoot} + {record.selectedSuffix}</td><td>{record.combined}</td><td>{record.correct ? "答對" : "答錯"}</td><td>{formatTime(record.secondsFromStart)}</td></tr>)}</tbody></table></div>}
         </div>
       </section>
+      {teamModalOpen && (
+        <div className="modal-overlay" role="dialog" aria-modal="true" onClick={closeTeamModal}>
+          <form className="team-modal" onSubmit={saveTeam} onClick={(event) => event.stopPropagation()}>
+            <div className="modal-heading">
+              <div>
+                <p className="eyebrow">{teamDraft.id ? "Edit Team" : "New Team"}</p>
+                <h2>{teamDraft.id ? "編輯隊伍" : "新增隊伍"}</h2>
+              </div>
+              <button type="button" onClick={closeTeamModal}>關閉</button>
+            </div>
+            <label>隊伍名稱<input placeholder="隊伍名稱" value={teamDraft.name} onChange={(event) => setTeamDraft({ ...teamDraft, name: event.target.value })} required /></label>
+            <label>密碼<input placeholder="密碼" value={teamDraft.password ?? ""} onChange={(event) => setTeamDraft({ ...teamDraft, password: event.target.value })} required /></label>
+            <div className="modal-avatar-field">
+              <span>隊伍頭像</span>
+              <AvatarUpload value={teamDraft.avatar || getDefaultAvatar(nextTeamNumber - 1)} onChange={(avatar) => setTeamDraft({ ...teamDraft, avatar })} onError={setTeamError} />
+            </div>
+            <label className="inline-check"><input type="checkbox" checked={teamDraft.enabled} onChange={(event) => setTeamDraft({ ...teamDraft, enabled: event.target.checked })} />啟用此隊伍</label>
+            {teamError && <p className="error-text">{teamError}</p>}
+            <div className="modal-actions">
+              <button type="button" onClick={closeTeamModal}>取消</button>
+              <button className="primary" type="submit">{teamDraft.id ? "儲存變更" : "新增隊伍"}</button>
+            </div>
+          </form>
+        </div>
+      )}
     </main>
   );
 }

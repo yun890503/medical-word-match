@@ -42,6 +42,10 @@ button:disabled {
   opacity: 0.5;
 }
 
+.danger {
+  color: #c5221f;
+}
+
 .primary,
 button.primary {
   background: #1967d2;
@@ -845,6 +849,13 @@ th {
   margin: 0;
 }
 
+.panel-heading {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
 .word-form,
 .teacher-form,
 .team-form,
@@ -882,6 +893,174 @@ th {
 
 .avatar-uploader.compact {
   min-width: 210px;
+}
+
+.team-management-panel {
+  grid-column: 1 / -1;
+}
+
+.team-list-header {
+  background: #f8fbff;
+  border: 1px solid #e1e7f0;
+  border-radius: 8px 8px 0 0;
+  color: #273247;
+  font-weight: 800;
+  padding: 12px 14px;
+}
+
+.team-card-list {
+  display: grid;
+  gap: 8px;
+}
+
+.team-card-row {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #e1e7f0;
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(24, 33, 47, 0.04);
+  display: grid;
+  gap: 14px;
+  grid-template-columns: auto minmax(170px, 1fr) minmax(150px, 0.8fr) auto auto minmax(260px, auto);
+  padding: 12px;
+}
+
+.team-drag-handle {
+  color: #8a96aa;
+  font-weight: 900;
+  letter-spacing: -2px;
+}
+
+.team-card-main,
+.team-avatar-summary {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+}
+
+.team-card-main div,
+.team-avatar-summary div {
+  display: grid;
+  min-width: 0;
+}
+
+.team-card-main strong,
+.team-avatar-summary strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.team-card-main span,
+.team-avatar-summary span {
+  color: #687385;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.team-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.team-card-actions button {
+  font-size: 13px;
+  min-height: 36px;
+  padding: 7px 10px;
+}
+
+.team-list-footnote {
+  border: 1px dashed #cbd9f2;
+  border-radius: 8px;
+  color: #8a96aa;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 11px;
+  text-align: center;
+}
+
+.team-legend {
+  align-items: center;
+  background: #f8fbff;
+  border: 1px solid #e1e7f0;
+  border-radius: 8px;
+  color: #687385;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 13px;
+  gap: 14px;
+  padding: 10px 12px;
+}
+
+.dot {
+  border-radius: 50%;
+  display: inline-block;
+  height: 9px;
+  margin-right: 6px;
+  width: 9px;
+}
+
+.dot.green {
+  background: #16a34a;
+}
+
+.dot.blue {
+  background: #1967d2;
+}
+
+.modal-overlay {
+  align-items: center;
+  background: rgba(24, 33, 47, 0.46);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 20px;
+  position: fixed;
+  z-index: 30;
+}
+
+.team-modal {
+  background: #ffffff;
+  border: 1px solid #dce3ee;
+  border-radius: 8px;
+  box-shadow: 0 24px 70px rgba(24, 33, 47, 0.28);
+  display: grid;
+  gap: 14px;
+  max-height: calc(100vh - 40px);
+  max-width: 520px;
+  overflow: auto;
+  padding: 22px;
+  width: min(100%, 520px);
+}
+
+.modal-heading {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.modal-heading h2 {
+  margin: 0;
+}
+
+.modal-avatar-field {
+  display: grid;
+  gap: 8px;
+}
+
+.modal-avatar-field > span {
+  color: #445064;
+  font-weight: 700;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
 }
 
 .inline-check {
@@ -957,6 +1136,15 @@ th {
   .team-row,
   .team-form {
     grid-template-columns: minmax(170px, 1fr) minmax(150px, 1fr) minmax(220px, 1fr);
+  }
+
+  .team-card-row {
+    grid-template-columns: auto minmax(180px, 1fr) minmax(150px, 1fr);
+  }
+
+  .team-card-actions {
+    grid-column: 2 / -1;
+    justify-content: flex-start;
   }
 }
 
@@ -1035,5 +1223,38 @@ th {
   .team-form,
   .team-row {
     grid-template-columns: 1fr;
+  }
+
+  .panel-heading,
+  .modal-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .team-card-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .team-avatar-summary,
+  .team-card-row > .lock-status,
+  .team-card-row > .inline-check,
+  .team-card-actions {
+    grid-column: 2;
+  }
+
+  .team-card-actions,
+  .modal-actions {
+    justify-content: stretch;
+  }
+
+  .team-card-actions button,
+  .modal-actions button {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .avatar-uploader.compact,
+  .avatar-uploader {
+    min-width: 0;
   }
 }
