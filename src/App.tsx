@@ -425,7 +425,7 @@ function LoginPanel({ onLogin, notice }: { onLogin: (session: Session, state: Ap
           {notice && <p className="hint">{notice}</p>}
           {error && <p className="error-text">{error}</p>}
           <button type="submit" className="primary" disabled={busy}>{busy ? "登入中" : "登入"}</button>
-          <p className="hint">123；隊伍由教師後台建立與管理。</p>
+          <p className="hint">隊伍由教師後台建立與管理。</p>
         </form>
       </section>
     </main>
@@ -616,8 +616,10 @@ function AdminView({ state, setState, remaining, scoreboard, currentTeacherId, a
   const [wordDraft, setWordDraft] = useState<WordItem>({ id: "", chinese: "", word: "", root: "", suffix: "" });
   const [teamDraft, setTeamDraft] = useState<Team>({ id: "", name: `Team${nextTeamNumber}`, password: `team${nextTeamNumber}`, enabled: true });
   const [teacherDraft, setTeacherDraft] = useState<Teacher>({ id: "", name: "", username: "", password: "", enabled: true });
+  const [teamEdits, setTeamEdits] = useState<Record<string, Pick<Team, "name" | "password" | "enabled">>>({});
   const [teacherError, setTeacherError] = useState("");
   const [teamError, setTeamError] = useState("");
+  const [teamMessage, setTeamMessage] = useState("");
   const [importMessage, setImportMessage] = useState("");
   const [customMinutes, setCustomMinutes] = useState(Math.round(state.settings.durationSeconds / 60).toString());
 
@@ -632,6 +634,7 @@ function AdminView({ state, setState, remaining, scoreboard, currentTeacherId, a
   }
   function saveTeam(event: FormEvent) {
     event.preventDefault();
+    setTeamMessage("");
     const name = teamDraft.name.trim();
     const password = (teamDraft.password ?? "").trim();
     if (!name || !password) {
@@ -648,8 +651,46 @@ function AdminView({ state, setState, remaining, scoreboard, currentTeacherId, a
     const nextNumber = getNextTeamNumber([...state.teams, next]);
     setTeamDraft({ id: "", name: `Team${nextNumber}`, password: `team${nextNumber}`, enabled: true });
     setTeamError("");
+    setTeamMessage(teamDraft.id ? "隊伍資料已儲存。" : "已新增隊伍。");
+  }
+  function getTeamEdit(team: Team) {
+    return teamEdits[team.id] ?? { name: team.name, password: team.password ?? "", enabled: team.enabled };
+  }
+  function updateTeamEdit(team: Team, patch: Partial<Pick<Team, "name" | "password" | "enabled">>) {
+    const current = getTeamEdit(team);
+    setTeamEdits((drafts) => ({ ...drafts, [team.id]: { ...current, ...patch } }));
+    setTeamError("");
+    setTeamMessage("");
+  }
+  function saveTeamRow(team: Team) {
+    const draft = getTeamEdit(team);
+    const name = draft.name.trim();
+    const password = (draft.password ?? "").trim();
+    if (!name || !password) {
+      setTeamError("請輸入隊伍名稱與密碼。");
+      setTeamMessage("");
+      return;
+    }
+    const duplicate = state.teams.some((item) => item.id !== team.id && normalize(item.name) === normalize(name));
+    if (duplicate) {
+      setTeamError("隊伍名稱已存在。");
+      setTeamMessage("");
+      return;
+    }
+    const next = { ...team, name, password, enabled: draft.enabled };
+    setState((current) => ({ ...current, teams: current.teams.map((item) => item.id === team.id ? next : item) }));
+    setTeamEdits((drafts) => {
+      const { [team.id]: _saved, ...rest } = drafts;
+      return rest;
+    });
+    setTeamError("");
+    setTeamMessage(`${name} 已儲存到資料庫。`);
   }
   function deleteTeam(teamId: string) {
+    setTeamEdits((drafts) => {
+      const { [teamId]: _deleted, ...rest } = drafts;
+      return rest;
+    });
     setState((current) => ({
       ...current,
       teams: current.teams.filter((team) => team.id !== teamId),
@@ -658,6 +699,7 @@ function AdminView({ state, setState, remaining, scoreboard, currentTeacherId, a
   }
   async function unlockTeam(teamId: string) {
     setTeamError("");
+    setTeamMessage("");
     try {
       const response = await fetch(`${API_ORIGIN}/api/teams/${teamId}/unlock`, {
         method: "POST",
@@ -669,6 +711,7 @@ function AdminView({ state, setState, remaining, scoreboard, currentTeacherId, a
         return;
       }
       setState(normalizeState(result));
+      setTeamMessage("已解除登入鎖。");
     } catch {
       setTeamError("解除登入鎖失敗，請確認後端服務是否正常。");
     }
@@ -824,17 +867,22 @@ function AdminView({ state, setState, remaining, scoreboard, currentTeacherId, a
             {teamDraft.id && <button type="button" onClick={() => { const nextNumber = getNextTeamNumber(state.teams); setTeamDraft({ id: "", name: `Team${nextNumber}`, password: `team${nextNumber}`, enabled: true }); setTeamError(""); }}>取消</button>}
           </form>
           {teamError && <p className="error-text">{teamError}</p>}
-          {state.teams.map((team) => (
-            <div className="team-row" key={team.id}>
-              <input value={team.name} onChange={(event) => setState({ ...state, teams: state.teams.map((item) => item.id === team.id ? { ...item, name: event.target.value } : item) })} />
-              <input value={team.password ?? ""} onChange={(event) => setState({ ...state, teams: state.teams.map((item) => item.id === team.id ? { ...item, password: event.target.value } : item) })} />
-              <label className="inline-check"><input type="checkbox" checked={team.enabled} onChange={(event) => setState({ ...state, teams: state.teams.map((item) => item.id === team.id ? { ...item, enabled: event.target.checked } : item) })} />啟用</label>
-              <span className={team.loginLocked ? "lock-status locked" : "lock-status"}>{team.loginLocked ? "已登入鎖定" : "未登入"}</span>
-              <button onClick={() => setTeamDraft(team)}>修改</button>
-              <button onClick={() => unlockTeam(team.id)} disabled={!team.loginLocked}>解除登入鎖</button>
-              <button onClick={() => deleteTeam(team.id)}>刪除</button>
-            </div>
-          ))}
+          {teamMessage && <p className="hint">{teamMessage}</p>}
+          {state.teams.map((team) => {
+            const draft = getTeamEdit(team);
+            const changed = draft.name !== team.name || (draft.password ?? "") !== (team.password ?? "") || draft.enabled !== team.enabled;
+            return (
+              <div className="team-row" key={team.id}>
+                <input value={draft.name} onChange={(event) => updateTeamEdit(team, { name: event.target.value })} />
+                <input value={draft.password ?? ""} onChange={(event) => updateTeamEdit(team, { password: event.target.value })} />
+                <label className="inline-check"><input type="checkbox" checked={draft.enabled} onChange={(event) => updateTeamEdit(team, { enabled: event.target.checked })} />啟用</label>
+                <span className={team.loginLocked ? "lock-status locked" : "lock-status"}>{team.loginLocked ? "已登入鎖定" : "未登入"}</span>
+                <button className={changed ? "primary" : ""} onClick={() => saveTeamRow(team)} disabled={!changed}>儲存</button>
+                <button onClick={() => unlockTeam(team.id)} disabled={!team.loginLocked}>解除登入鎖</button>
+                <button onClick={() => deleteTeam(team.id)}>刪除</button>
+              </div>
+            );
+          })}
         </div>
         <div className="panel">
           <h2>教師帳號管理</h2>
