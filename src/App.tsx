@@ -1,4 +1,4 @@
-import { ChangeEvent, DragEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, FormEvent, MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Download, FileDown, FileSpreadsheet, LogOut, Monitor, Pause, Pencil, Play, Plus, Settings, Trash2, Trophy, Users } from "lucide-react";
 import jsPDF from "jspdf";
 import * as XLSX from "xlsx";
@@ -546,16 +546,41 @@ function TeamResultOverlay({ rank, result, onClose }: {
   result: ReturnType<typeof buildScoreboard>[number];
   onClose: () => void;
 }) {
-  const medal = rank === 1 ? { label: "金牌", className: "gold" } : rank === 2 ? { label: "銀牌", className: "silver" } : rank === 3 ? { label: "銅牌", className: "bronze" } : null;
+  const medal = rank === 1 ? { label: "金牌", className: "gold" } : rank === 2 ? { label: "銀牌", className: "silver" } : rank === 3 ? { label: "銅牌", className: "bronze" } : { label: "完成", className: "standard" };
+  const finishTime = result.finishTime === Number.MAX_SAFE_INTEGER ? "-" : formatTime(result.finishTime);
+  async function shareResult(event: MouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+    const text = `${result.name} 第 ${rank} 名，得分 ${result.score} 分，完成時間 ${finishTime}`;
+    if (navigator.share) {
+      await navigator.share({ title: "醫學英文競賽結果", text });
+      return;
+    }
+    await navigator.clipboard?.writeText(text);
+  }
+
   return (
     <div className="result-overlay" role="status" aria-live="polite" onClick={onClose}>
-      <div className="result-card" onClick={(event) => event.stopPropagation()}>
-        {medal ? <div className={`medal ${medal.className}`}>{medal.label}</div> : <div className="medal standard">完成</div>}
-        <p className="eyebrow">比賽結果</p>
-        <h2><TeamAvatar team={result} />{result.name} 第 {rank} 名</h2>
-        <p className="result-score">得分 {result.score} 分</p>
-        <p className="hint">完成時間：{result.finishTime === Number.MAX_SAFE_INTEGER ? "-" : formatTime(result.finishTime)}</p>
-        <button type="button" onClick={onClose}>關閉</button>
+      <div className={`result-card podium ${medal.className}`} onClick={(event) => event.stopPropagation()}>
+        <div className="podium-confetti" aria-hidden="true"></div>
+        <div className={`podium-medal ${medal.className}`}>
+          <span className="podium-crown">♛</span>
+          <strong>{medal.label}</strong>
+          <small>比賽結果</small>
+        </div>
+        <div className="podium-avatar-ring">
+          <TeamAvatar team={result} size="lg" />
+        </div>
+        <div className="podium-rank-line">
+          <span>{result.name}</span>
+          <b>第 {rank} 名</b>
+        </div>
+        <div className="podium-divider"></div>
+        <p className="result-score">得分 <strong>{result.score}</strong> 分</p>
+        <div className="podium-time"><span>◷</span> 完成時間 <strong>{finishTime}</strong></div>
+        <div className="podium-actions">
+          <button type="button" onClick={shareResult}>分享結果</button>
+          <button className="primary" type="button" onClick={onClose}>回到首頁</button>
+        </div>
       </div>
     </div>
   );
